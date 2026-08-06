@@ -68,7 +68,7 @@ foreach ($au in $aus) {
 Write-Host "`nRemoving EMOS_ EM catalog and access packages..." -ForegroundColor Cyan
 try {
     $catalogs = (Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=startswith(displayName,'EMOS_')" `
+        -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/catalogs?`$filter=startswith(displayName,'EMOS_')" `
         -OutputType PSObject).value
 
     foreach ($cat in $catalogs) {
@@ -83,7 +83,7 @@ try {
             }
         }
         if ($PSCmdlet.ShouldProcess($cat.displayName, 'Delete catalog')) {
-            Invoke-GraphDelete -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($cat.id)"
+            Invoke-GraphDelete -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/catalogs/$($cat.id)"
             Write-Host "  ✓ Deleted catalog: $($cat.displayName)" -ForegroundColor DarkGray
         }
     }
@@ -94,4 +94,5 @@ catch {
 #endregion
 
 Write-Host "`n✅ Cleanup complete." -ForegroundColor Green
+
 

@@ -176,7 +176,7 @@ $apResults = [System.Collections.Generic.List[PSCustomObject]]::new()
 try {
     # Use the built-in General catalog — avoids catalog-owner permission issues
     $catalog = (Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'General'" `
+        -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/catalogs?`$filter=displayName eq 'General'" `
         -OutputType PSObject -ErrorAction Stop).value | Select-Object -First 1
 
     if (-not $catalog) { throw "General catalog not found — Entitlement Management may not be enabled." }
