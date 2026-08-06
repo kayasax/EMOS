@@ -12,8 +12,12 @@ function Invoke-EMOSReport {
         Retrieve owner/admin details (slower but richer output).
     .PARAMETER NoHtml
         Skip HTML report generation.
+    .PARAMETER Show
+        Automatically open the HTML report in the default browser after generation.
     .EXAMPLE
         Invoke-EMOSReport
+    .EXAMPLE
+        Invoke-EMOSReport -IncludeOwners -Show
     .EXAMPLE
         Invoke-EMOSReport -OutputPath "$HOME/EMOS-Reports" -IncludeOwners
     #>
@@ -21,10 +25,11 @@ function Invoke-EMOSReport {
     param(
         [string]$OutputPath = (Join-Path $HOME 'EMOS-Reports'),
         [switch]$IncludeOwners,
-        [switch]$NoHtml
+        [switch]$NoHtml,
+        [switch]$Show
     )
 
-    $timestamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $timestamp    = Get-Date -Format 'yyyyMMdd-HHmmss'
     $deadlineDays = [int](($script:EMOS_RETIREMENT_DATE - (Get-Date)).TotalDays)
 
     # Ensure output directory exists
@@ -37,15 +42,15 @@ function Invoke-EMOSReport {
     Write-Host ("-" * 60)
 
     # Run all three scanners
-    $groups    = Get-EMOSAffectedGroups    -IncludeOwners:$IncludeOwners
-    $aus       = Get-EMOSAffectedAdminUnits
-    $emPolicies= Get-EMOSAffectedEMPolicies
+    $groups     = Get-EMOSAffectedGroups -IncludeOwners:$IncludeOwners
+    $aus        = Get-EMOSAffectedAdminUnits
+    $emPolicies = Get-EMOSAffectedEMPolicies
 
     # Blast-radius enrichment for groups
     $caGroupIds = Get-EMOSCATargetedGroupIds
     foreach ($g in $groups) {
         $tags = @()
-        if ($caGroupIds -contains $g.ObjectId)  { $tags += 'ConditionalAccess' }
+        if ($caGroupIds -contains $g.ObjectId) { $tags += 'ConditionalAccess' }
         $g.BlastRadius = $tags -join ', '
     }
 
@@ -63,21 +68,25 @@ function Invoke-EMOSReport {
         return
     }
 
-    # Export CSV
-    $csvPath = Join-Path $OutputPath "EMOS-Report-$timestamp.csv"
-    $allFindings | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
-    Write-Host "`nCSV  : $csvPath" -ForegroundColor Green
-
-    # Export JSON
+    # Export files
+    $csvPath  = Join-Path $OutputPath "EMOS-Report-$timestamp.csv"
     $jsonPath = Join-Path $OutputPath "EMOS-Report-$timestamp.json"
-    $allFindings | ConvertTo-Json -Depth 5 | Set-Content -Path $jsonPath -Encoding UTF8
-    Write-Host "JSON : $jsonPath" -ForegroundColor Green
+    $htmlPath = Join-Path $OutputPath "EMOS-Report-$timestamp.html"
 
-    # Export HTML
+    $allFindings | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+    $allFindings | ConvertTo-Json -Depth 5 | Set-Content -Path $jsonPath -Encoding UTF8
+
     if (-not $NoHtml) {
-        $htmlPath = Join-Path $OutputPath "EMOS-Report-$timestamp.html"
         Export-EMOSHtmlReport -Findings $allFindings -OutputPath $htmlPath -DeadlineDays $deadlineDays
+    }
+
+    # Print paths at the end, after the findings scroll
+    Write-Host "`n--- Reports ---" -ForegroundColor Cyan
+    Write-Host "CSV  : $csvPath"  -ForegroundColor Green
+    Write-Host "JSON : $jsonPath" -ForegroundColor Green
+    if (-not $NoHtml) {
         Write-Host "HTML : $htmlPath" -ForegroundColor Green
+        if ($Show) { Start-Process $htmlPath }
     }
 
     return $allFindings
