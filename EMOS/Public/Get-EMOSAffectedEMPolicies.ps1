@@ -14,31 +14,34 @@ function Get-EMOSAffectedEMPolicies {
 
     Write-Progress -Activity "EMOS Scan" -Status "Scanning Entitlement Management policies..." -PercentComplete 65
 
-    $response = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies?`$expand=accessPackage&`$select=id,displayName,description,automaticRequestSettings,accessPackage"
-
-    $policies = $response
+    $policies = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies?`$expand=accessPackage&`$select=id,displayName,description,allowedTargetScope,specificAllowedTargets,automaticRequestSettings,accessPackage"
 
     Write-Verbose "Found $($policies.Count) assignment policies. Filtering for auto-assign with MemberOf..."
 
     foreach ($policy in $policies) {
-        $autoSettings = $policy.automaticRequestSettings
-        if (-not $autoSettings -or -not $autoSettings.requestorFilterExpression) { continue }
+        # MemberOf rule lives in specificAllowedTargets[].membershipRule
+        # where @odata.type is #microsoft.graph.attributeRuleMembers
+        $memberOfTargets = @($policy.specificAllowedTargets | Where-Object {
+            $_.'@odata.type' -eq '#microsoft.graph.attributeRuleMembers' -and
+            $_.membershipRule -match $script:MEMBEROF_PATTERN
+        })
 
-        $ruleText = $autoSettings.requestorFilterExpression | ConvertTo-Json -Compress
-        if ($ruleText -notmatch $script:MEMBEROF_PATTERN) { continue }
+        if ($memberOfTargets.Count -eq 0) { continue }
+
+        $ruleText = ($memberOfTargets | ForEach-Object { $_.membershipRule }) -join ' | '
 
         [PSCustomObject]@{
-            ObjectType          = 'EMAutoAssignPolicy'
-            ObjectId            = $policy.id
-            DisplayName         = $policy.displayName
-            Description         = $policy.description
-            AccessPackageId     = $policy.accessPackage.id
-            AccessPackageName   = $policy.accessPackage.displayName
-            MembershipRule      = $ruleText
-            RuleComplexity      = Get-EMOSRuleComplexity -Rule $ruleText
-            SuggestedAction     = Get-EMOSSuggestedAction -Rule $ruleText -ObjectType 'EMPolicy'
-            DeadlineDays        = [int](($script:EMOS_RETIREMENT_DATE - (Get-Date)).TotalDays)
-            BlastRadius         = 'Entitlement Management'
+            ObjectType        = 'EMAutoAssignPolicy'
+            ObjectId          = $policy.id
+            DisplayName       = $policy.displayName
+            Description       = $policy.description
+            AccessPackageId   = $policy.accessPackage.id
+            AccessPackageName = $policy.accessPackage.displayName
+            MembershipRule    = $ruleText
+            RuleComplexity    = Get-EMOSRuleComplexity -Rule $ruleText
+            SuggestedAction   = Get-EMOSSuggestedAction -Rule $ruleText -ObjectType 'EMPolicy'
+            DeadlineDays      = [int](($script:EMOS_RETIREMENT_DATE - (Get-Date)).TotalDays)
+            BlastRadius       = 'Entitlement Management'
         }
     }
 

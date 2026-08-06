@@ -18,11 +18,10 @@ Describe 'Get-EMOSAffectedEMPolicies' {
     Context 'Filtering — only MemberOf policies returned' {
         BeforeEach {
             $policies = @(
-                New-MockEMPolicy -DisplayName 'MemberOf Policy' -RuleJson '"user.memberof -any (group.objectId -in ['g1'])"'
-                New-MockEMPolicy -DisplayName 'No MemberOf'     -RuleJson '"user.department -eq \"HR\""'
-                New-MockEMPolicy -DisplayName 'Mixed Policy'    -RuleJson '"user.memberof -any (group.objectId -in ['g2'])"'
+                New-MockEMPolicy -DisplayName 'MemberOf Policy' -MembershipRule "user.memberof -any (group.objectId -in ['g1'])"
+                New-MockEMPolicy -DisplayName 'No MemberOf'     -MembershipRule 'user.department -eq "HR"'
+                New-MockEMPolicy -DisplayName 'Mixed Policy'    -MembershipRule "user.memberof -any (group.objectId -in ['g2'])"
             )
-            $mockResponse = [PSCustomObject]@{ value = $policies; '@odata.nextLink' = $null }
             Mock Invoke-EMOSGraphRequest { return $policies }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
@@ -39,21 +38,23 @@ Describe 'Get-EMOSAffectedEMPolicies' {
         }
     }
 
-    Context 'Policies with no automaticRequestSettings are skipped' {
+    Context 'Policies with no attributeRuleMembers are skipped' {
         BeforeEach {
-            $noAutoSettings = [PSCustomObject]@{
-                id                       = [guid]::NewGuid().ToString()
-                displayName              = 'Manual Policy'
-                description              = ''
-                automaticRequestSettings = $null
-                accessPackage            = @{ id = 'pkg1'; displayName = 'Pkg' }
+            $noMemberOfPolicy = [PSCustomObject]@{
+                id                     = [guid]::NewGuid().ToString()
+                displayName            = 'Manual Policy'
+                description            = ''
+                allowedTargetScope     = 'allMemberUsers'
+                specificAllowedTargets = @()   # no attributeRuleMembers
+                automaticRequestSettings = [PSCustomObject]@{ requestAccessForAllowedTargets = $true }
+                accessPackage          = [PSCustomObject]@{ id = 'pkg1'; displayName = 'Pkg' }
             }
-            Mock Invoke-EMOSGraphRequest { return @($noAutoSettings) }
+            Mock Invoke-EMOSGraphRequest { return @($noMemberOfPolicy) }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
 
-        It 'Skips policies with null automaticRequestSettings' {
+        It 'Skips policies with no attributeRuleMembers' {
             @(Get-EMOSAffectedEMPolicies).Count | Should -Be 0
         }
     }
@@ -86,6 +87,7 @@ Describe 'Get-EMOSAffectedEMPolicies' {
         }
     }
 }
+
 
 
 

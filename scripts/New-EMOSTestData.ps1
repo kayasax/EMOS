@@ -208,17 +208,20 @@ try {
             $policy = Invoke-GraphPost `
                 -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies' `
                 -Body @{
-                    displayName        = "${pkgName}_AutoPolicy"
-                    description        = 'EMOS test auto-assignment policy'
-                    accessPackage      = @{ id = $pkg.id }
-                    allowedTargetScope = 'allMemberUsers'
+                    displayName          = "${pkgName}_AutoPolicy"
+                    description          = 'EMOS test auto-assignment policy'
+                    accessPackage        = @{ id = $pkg.id }
+                    allowedTargetScope   = 'specificDirectoryUsers'
+                    specificAllowedTargets = @(
+                        @{
+                            '@odata.type'  = '#microsoft.graph.attributeRuleMembers'
+                            description    = 'MemberOf test rule'
+                            membershipRule = $filterExpr
+                        }
+                    )
                     automaticRequestSettings = @{
-                        requestorFilterType                    = 'IncludeAll'
-                        requestorFilterExpression              = $filterExpr
-                        enableOnBehalfRequestorsToAddAccess    = $true
-                        enableOnBehalfRequestorsToUpdateAccess = $true
-                        enableOnBehalfRequestorsToRemoveAccess = $true
-                        onBehalfRequestors                     = @()
+                        requestAccessForAllowedTargets             = $true
+                        removeAccessWhenTargetLeavesAllowedTargets = $true
                     }
                 }
             $apResults.Add([PSCustomObject]@{ Name = $pkgName; PolicyId = $policy.id; Complexity = $label })
