@@ -1,0 +1,21 @@
+# PowerShell build artifacts
+*.zip
+*.nupkg
+
+# Test output
+tests/TestResults/
+*.xml
+
+# Report output (don't commit generated reports)
+**/EMOS-Report-*.html
+**/EMOS-Report-*.csv
+**/EMOS-Report-*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+*.suo
+*.user
