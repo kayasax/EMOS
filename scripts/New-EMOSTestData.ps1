@@ -183,6 +183,7 @@ catch {
 }
 
 if ($emAvailable) {
+    $catalog = $null
     try {
         $catalog = Invoke-GraphPost `
             -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
@@ -232,7 +233,19 @@ if ($emAvailable) {
         }
     }
     catch {
-        Write-Warning "EM policy creation failed: $_"
+        # Clean up orphaned catalog if package/policy creation failed
+        if ($catalog) {
+            Write-Warning "Cleaning up orphaned catalog $($catalog.id)..."
+            Invoke-MgGraphRequest -Method DELETE `
+                -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($catalog.id)" `
+                -ErrorAction SilentlyContinue
+        }
+        if ($_ -match '403|Forbidden|Unauthorized|UnAuthorized') {
+            Write-Warning "EM package creation requires 'Identity Governance Administrator' role in Entra ID."
+            Write-Warning "Assign the role at: https://entra.microsoft.com/#view/Microsoft_AAD_IAM/RolesManagementMenuBlade"
+        } else {
+            Write-Warning "EM policy creation failed: $_"
+        }
     }
 }
 Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor Green
