@@ -185,14 +185,23 @@ catch {
 if ($emAvailable) {
     $catalog = $null
     try {
-        $catalog = Invoke-GraphPost `
-            -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
-            -Body @{
-                displayName         = 'EMOS_TestCatalog'
-                description         = 'EMOS integration test catalog'
-                isExternallyVisible = $false
-            }
-        Write-Host "  ✓ Catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
+        # Reuse existing EMOS_TestCatalog if it already exists
+        $existing = (Invoke-MgGraphRequest -Method GET `
+            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'EMOS_TestCatalog'" `
+            -OutputType PSObject).value
+        if ($existing) {
+            $catalog = $existing[0]
+            Write-Host "  ↩ Reusing existing catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
+        } else {
+            $catalog = Invoke-GraphPost `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
+                -Body @{
+                    displayName         = 'EMOS_TestCatalog'
+                    description         = 'EMOS integration test catalog'
+                    isExternallyVisible = $false
+                }
+            Write-Host "  ✓ Catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
+        }
 
         for ($i = 1; $i -le $APCount; $i++) {
             $complexity = switch (($i % 3)) { 0 { 1 } 1 { 2 } 2 { 3 } }
