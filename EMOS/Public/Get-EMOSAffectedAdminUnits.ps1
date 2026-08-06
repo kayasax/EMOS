@@ -18,7 +18,8 @@ function Get-EMOSAffectedAdminUnits {
 
     Write-Progress -Activity "EMOS Scan" -Status "Scanning Administrative Units..." -PercentComplete 40
 
-    $aus = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/administrativeUnits?`$filter=membershipType eq 'Dynamic'&`$select=id,displayName,membershipRule,membershipType,description"
+    $aus = Invoke-EMOSGraphRequest `
+        -Uri "https://graph.microsoft.com/beta/administrativeUnits?`$filter=membershipType eq 'Dynamic'&`$select=id,displayName,membershipRule,membershipType,description"
 
     Write-Verbose "Found $($aus.Count) dynamic AUs. Filtering for MemberOf..."
 
