@@ -167,7 +167,7 @@ $apResults = [System.Collections.Generic.List[PSCustomObject]]::new()
 # First create a catalog and access packages to attach policies to
 try {
     $catalog = Invoke-GraphPost `
-        -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackageCatalogs' `
+        -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
         -Body @{
             displayName       = 'EMOS_TestCatalog'
             description       = 'EMOS integration test catalog'
@@ -183,7 +183,7 @@ try {
         if ($PSCmdlet.ShouldProcess($pkgName, 'Create access package + policy')) {
             # Create access package
             $pkg = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackages' `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages' `
                 -Body @{
                     displayName = $pkgName
                     description = "EMOS test - $label complexity"
@@ -195,7 +195,7 @@ try {
             $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
 
             $policy = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies' `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/assignmentPolicies' `
                 -Body @{
                     displayName    = "${pkgName}_AutoPolicy"
                     description    = "EMOS test auto-assignment policy"
@@ -234,3 +234,4 @@ Write-Host "  High   : $(($auResults | Where-Object Complexity -eq 'High').Count
 Write-Host "EM Policies    : $($apResults.Count)"
 Write-Host "`nRun 'Invoke-EMOSReport' to scan, then 'Remove-EMOSTestData.ps1' to clean up."
 #endregion
+

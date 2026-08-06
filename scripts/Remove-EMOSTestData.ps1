@@ -68,22 +68,22 @@ foreach ($au in $aus) {
 Write-Host "`nRemoving EMOS_ EM catalog and access packages..." -ForegroundColor Cyan
 try {
     $catalogs = (Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=startswith(displayName,'EMOS_')" `
+        -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=startswith(displayName,'EMOS_')" `
         -OutputType PSObject).value
 
     foreach ($cat in $catalogs) {
         # Delete packages first
         $pkgs = (Invoke-MgGraphRequest -Method GET `
-            -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackages?`$filter=catalog/id eq '$($cat.id)'" `
+            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages?`$filter=catalog/id eq '$($cat.id)'" `
             -OutputType PSObject).value
         foreach ($pkg in $pkgs) {
             if ($PSCmdlet.ShouldProcess($pkg.displayName, 'Delete access package')) {
-                Invoke-GraphDelete -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackages/$($pkg.id)"
+                Invoke-GraphDelete -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages/$($pkg.id)"
                 Write-Host "  ✓ Deleted package: $($pkg.displayName)" -ForegroundColor DarkGray
             }
         }
         if ($PSCmdlet.ShouldProcess($cat.displayName, 'Delete catalog')) {
-            Invoke-GraphDelete -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackageCatalogs/$($cat.id)"
+            Invoke-GraphDelete -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($cat.id)"
             Write-Host "  ✓ Deleted catalog: $($cat.displayName)" -ForegroundColor DarkGray
         }
     }
@@ -94,3 +94,4 @@ catch {
 #endregion
 
 Write-Host "`n✅ Cleanup complete." -ForegroundColor Green
+
