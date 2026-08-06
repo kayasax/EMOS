@@ -17,6 +17,7 @@
 
     FunctionsToExport = @(
         'Connect-EMOS'
+        'Disconnect-EMOS'
         'Get-EMOSAffectedGroups'
         'Get-EMOSAffectedAdminUnits'
         'Get-EMOSAffectedEMPolicies'

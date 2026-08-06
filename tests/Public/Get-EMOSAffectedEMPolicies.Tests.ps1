@@ -4,10 +4,13 @@ BeforeAll {
     $root = "$PSScriptRoot\..\.."
     . "$root\EMOS\Private\Get-EMOSRuleComplexity.ps1"
     . "$root\EMOS\Private\Get-EMOSSuggestedAction.ps1"
+    . "$root\EMOS\Private\Invoke-EMOSGraphRequest.ps1"
     . "$root\EMOS\Public\Get-EMOSAffectedEMPolicies.ps1"
 
     $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
+
+    function Invoke-MgGraphRequest { throw "stub - must be mocked" }
 }
 
 Describe 'Get-EMOSAffectedEMPolicies' {
@@ -20,7 +23,7 @@ Describe 'Get-EMOSAffectedEMPolicies' {
                 New-MockEMPolicy -DisplayName 'Mixed Policy'    -RuleJson '"memberOf(\"g2\") -and user.city -eq \"Paris\""'
             )
             $mockResponse = [PSCustomObject]@{ value = $policies; '@odata.nextLink' = $null }
-            Mock Invoke-MgGraphRequest { return $mockResponse }
+            Mock Invoke-EMOSGraphRequest { return $policies }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -45,7 +48,7 @@ Describe 'Get-EMOSAffectedEMPolicies' {
                 automaticRequestSettings = $null
                 accessPackage            = @{ id = 'pkg1'; displayName = 'Pkg' }
             }
-            Mock Invoke-MgGraphRequest { [PSCustomObject]@{ value = @($noAutoSettings); '@odata.nextLink' = $null } }
+            Mock Invoke-EMOSGraphRequest { return @($noAutoSettings) }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -58,7 +61,7 @@ Describe 'Get-EMOSAffectedEMPolicies' {
     Context 'Output object shape' {
         BeforeEach {
             $policy = New-MockEMPolicy -DisplayName 'Shape Test' -RuleJson '"memberOf(\"g1\")"' -PackageName 'Access Pkg A'
-            Mock Invoke-MgGraphRequest { [PSCustomObject]@{ value = @($policy); '@odata.nextLink' = $null } }
+            Mock Invoke-EMOSGraphRequest { return @($policy) }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -83,3 +86,4 @@ Describe 'Get-EMOSAffectedEMPolicies' {
         }
     }
 }
+

@@ -18,16 +18,7 @@ function Get-EMOSAffectedAdminUnits {
 
     Write-Progress -Activity "EMOS Scan" -Status "Scanning Administrative Units..." -PercentComplete 40
 
-    # Graph filter: dynamic AUs only
-    $allAUs = Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/v1.0/administrativeUnits?`$filter=membershipType eq 'Dynamic'&`$select=id,displayName,membershipRule,membershipType,description" `
-        -OutputType PSObject
-
-    $aus = $allAUs.value
-    while ($allAUs.'@odata.nextLink') {
-        $allAUs = Invoke-MgGraphRequest -Method GET -Uri $allAUs.'@odata.nextLink' -OutputType PSObject
-        $aus += $allAUs.value
-    }
+    $aus = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/administrativeUnits?`$filter=membershipType eq 'Dynamic'&`$select=id,displayName,membershipRule,membershipType,description"
 
     Write-Verbose "Found $($aus.Count) dynamic AUs. Filtering for MemberOf..."
 

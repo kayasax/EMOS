@@ -14,15 +14,9 @@ function Get-EMOSAffectedEMPolicies {
 
     Write-Progress -Activity "EMOS Scan" -Status "Scanning Entitlement Management policies..." -PercentComplete 65
 
-    $response = Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies?`$expand=accessPackage&`$select=id,displayName,description,automaticRequestSettings,accessPackage" `
-        -OutputType PSObject
+    $response = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies?`$expand=accessPackage&`$select=id,displayName,description,automaticRequestSettings,accessPackage"
 
-    $policies = $response.value
-    while ($response.'@odata.nextLink') {
-        $response = Invoke-MgGraphRequest -Method GET -Uri $response.'@odata.nextLink' -OutputType PSObject
-        $policies += $response.value
-    }
+    $policies = $response
 
     Write-Verbose "Found $($policies.Count) assignment policies. Filtering for auto-assign with MemberOf..."
 

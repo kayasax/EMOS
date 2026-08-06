@@ -4,10 +4,14 @@ BeforeAll {
     $root = "$PSScriptRoot\..\.."
     . "$root\EMOS\Private\Get-EMOSRuleComplexity.ps1"
     . "$root\EMOS\Private\Get-EMOSSuggestedAction.ps1"
+    . "$root\EMOS\Private\Invoke-EMOSGraphRequest.ps1"
     . "$root\EMOS\Public\Get-EMOSAffectedAdminUnits.ps1"
 
     $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
+
+    # Stub so Pester can mock the helper
+    function Invoke-MgGraphRequest { throw "stub - must be mocked" }
 }
 
 Describe 'Get-EMOSAffectedAdminUnits' {
@@ -23,7 +27,7 @@ Describe 'Get-EMOSAffectedAdminUnits' {
                 value              = $mockAUs
                 '@odata.nextLink'  = $null
             }
-            Mock Invoke-MgGraphRequest { return $mockResponse }
+            Mock Invoke-EMOSGraphRequest { return $mockAUs }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -39,27 +43,19 @@ Describe 'Get-EMOSAffectedAdminUnits' {
         }
     }
 
-    Context 'Pagination — follows nextLink' {
+    Context 'Pagination — helper returns all items to scanner' {
         BeforeEach {
-            $page1 = [PSCustomObject]@{
-                value             = @(New-MockAdminUnit -displayName 'AU Page 1' -membershipRule 'memberOf("g1")')
-                '@odata.nextLink' = 'https://graph.microsoft.com/v1.0/page2'
-            }
-            $page2 = [PSCustomObject]@{
-                value             = @(New-MockAdminUnit -displayName 'AU Page 2' -membershipRule 'memberOf("g2")')
-                '@odata.nextLink' = $null
-            }
-
-            $callCount = 0
-            Mock Invoke-MgGraphRequest {
-                $script:callCount++
-                if ($script:callCount -eq 1) { return $page1 } else { return $page2 }
-            }
+            # Pagination is handled by Invoke-EMOSGraphRequest; scanner receives flat array
+            $allAUs = @(
+                New-MockAdminUnit -displayName 'AU Page 1' -membershipRule 'memberOf("g1")'
+                New-MockAdminUnit -displayName 'AU Page 2' -membershipRule 'memberOf("g2")'
+            )
+            Mock Invoke-EMOSGraphRequest { return $allAUs }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
 
-        It 'Retrieves AUs from all pages' {
+        It 'Processes all items returned by the helper' {
             $result = Get-EMOSAffectedAdminUnits
             $result.Count | Should -Be 2
         }
@@ -68,7 +64,7 @@ Describe 'Get-EMOSAffectedAdminUnits' {
     Context 'Output object shape' {
         BeforeEach {
             $au = New-MockAdminUnit -displayName 'Shape Test' -membershipRule 'memberOf("g1")'
-            Mock Invoke-MgGraphRequest { [PSCustomObject]@{ value = @($au); '@odata.nextLink' = $null } }
+            Mock Invoke-EMOSGraphRequest { return @($au) }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -87,7 +83,7 @@ Describe 'Get-EMOSAffectedAdminUnits' {
 
     Context 'Empty tenant' {
         BeforeEach {
-            Mock Invoke-MgGraphRequest { [PSCustomObject]@{ value = @(); '@odata.nextLink' = $null } }
+            Mock Invoke-EMOSGraphRequest { return @() }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -97,3 +93,4 @@ Describe 'Get-EMOSAffectedAdminUnits' {
         }
     }
 }
+

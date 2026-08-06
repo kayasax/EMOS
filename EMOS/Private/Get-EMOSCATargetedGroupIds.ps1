@@ -10,11 +10,9 @@ function Get-EMOSCATargetedGroupIds {
     $groupIds = [System.Collections.Generic.HashSet[string]]::new()
 
     try {
-        $policies = Invoke-MgGraphRequest -Method GET `
-            -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies?`$select=id,displayName,conditions" `
-            -OutputType PSObject
+        $policies = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies?`$select=id,displayName,conditions"
 
-        foreach ($policy in $policies.value) {
+        foreach ($policy in $policies) {
             $includeGroups = $policy.conditions?.users?.includeGroups
             $excludeGroups = $policy.conditions?.users?.excludeGroups
             foreach ($g in @($includeGroups) + @($excludeGroups)) {
