@@ -83,6 +83,7 @@ function Export-EMOSHtmlReport {
           <td>$action</td>
           <td>$blastCell</td>
         </tr>"
+    }
 
     $html = @"
 <!DOCTYPE html>
@@ -187,8 +188,8 @@ function Export-EMOSHtmlReport {
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
 var table;
-\$(document).ready(function() {
-  table = \$('#findings').DataTable({
+`$(document).ready(function() {
+  table = `$('#findings').DataTable({
     pageLength: 25,
     order: [[3, 'desc']],
     columnDefs: [
@@ -206,23 +207,23 @@ var table;
     dom: 'tip'   // table, info, pagination — search handled by custom toolbar
   });
 
-  \$('#filter-type').on('change', function() {
+  `$('#filter-type').on('change', function() {
     // Search the hidden .dt-type span text in column 0
     table.column(0).search(this.value, false, false).draw();
   });
-  \$('#filter-complexity').on('change', function() {
+  `$('#filter-complexity').on('change', function() {
     // Search the visible span text in column 3
     table.column(3).search(this.value, false, false).draw();
   });
-  \$('#filter-search').on('input', function() {
+  `$('#filter-search').on('input', function() {
     table.search(this.value).draw();
   });
 });
 
 function clearFilters() {
-  \$('#filter-type').val('');
-  \$('#filter-complexity').val('');
-  \$('#filter-search').val('');
+  `$('#filter-type').val('');
+  `$('#filter-complexity').val('');
+  `$('#filter-search').val('');
   table.search('').columns().search('').draw();
 }
 </script>
