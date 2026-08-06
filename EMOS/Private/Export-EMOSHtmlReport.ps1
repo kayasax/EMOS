@@ -174,6 +174,15 @@ function Export-EMOSHtmlReport {
       <option value="Medium">Medium</option>
       <option value="Low">Low</option>
     </select>
+    <label>Blast Radius:</label>
+    <select id="filter-blast">
+      <option value="">All</option>
+      <option value="with">With blast radius</option>
+      <option value="ConditionalAccess">CA-targeted</option>
+      <option value="Licensing">Licensing</option>
+      <option value="Entitlement Management">EM Policy</option>
+      <option value="none">None</option>
+    </select>
     <label>Search:</label>
     <input type="search" id="filter-search" placeholder="Filter by name, ID, or rule…">
     <span id="findings-clear" onclick="clearFilters()">Clear filters</span>
@@ -224,6 +233,16 @@ var table;
     // Search the visible span text in column 3
     table.column(3).search(this.value, false, false).draw();
   });
+  `$('#filter-blast').on('change', function() {
+    var val = this.value;
+    if (val === 'with') {
+      table.column(5).search('^(?!—$).+', true, false).draw();
+    } else if (val === 'none') {
+      table.column(5).search('^—$', true, false).draw();
+    } else {
+      table.column(5).search(val, false, false).draw();
+    }
+  });
   `$('#filter-search').on('input', function() {
     table.search(this.value).draw();
   });
@@ -232,7 +251,9 @@ var table;
 function clearFilters() {
   `$('#filter-type').val('');
   `$('#filter-complexity').val('');
+  `$('#filter-blast').val('');
   `$('#filter-search').val('');
+  table.column(5).search('').draw();
   table.search('').columns().search('').draw();
 }
 </script>

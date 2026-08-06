@@ -236,6 +236,8 @@ Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor 
 #endregion
 
 #region ── Summary ───────────────────────────────────────────────────────────
+# To test Licensing blast radius: assign a license to any EMOS_ group via Entra portal
+# Identity Governance → Groups → [group] → Licenses → Assign
 Write-Host "`n=== TEST DATA SUMMARY ===" -ForegroundColor Cyan
 Write-Host "Dynamic Groups : $($groupResults.Count)"
 Write-Host "  Low    : $(@($groupResults | Where-Object Complexity -eq 'Low').Count)"
@@ -248,4 +250,3 @@ Write-Host "  High   : $(@($auResults | Where-Object Complexity -eq 'High').Coun
 Write-Host "EM Policies    : $($apResults.Count)"
 Write-Host "`nRun 'Invoke-EMOSReport' to scan, then 'Remove-EMOSTestData.ps1' to clean up."
 #endregion
-
