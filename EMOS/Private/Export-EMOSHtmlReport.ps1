@@ -30,6 +30,8 @@ function Export-EMOSHtmlReport {
         }
         $rule = [System.Web.HttpUtility]::HtmlEncode($f.MembershipRule ?? '')
 
+        $apId = if ($f.PSObject.Properties['AccessPackageId']) { $f.AccessPackageId } else { '' }
+
         # Direct Entra portal links per object type
         $portalLink = switch ($f.ObjectType) {
             'DynamicGroup' {
@@ -39,25 +41,26 @@ function Export-EMOSHtmlReport {
                 "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AdministrativeUnitEditMenuBlade/~/Overview/objectId/$($f.ObjectId)"
             }
             'EMAutoAssignPolicy' {
-                "https://entra.microsoft.com/#view/Microsoft_AAD_ELM/AccessPackageMenuBlade/~/Policies/accessPackageId/$($f.AccessPackageId)"
+                "https://entra.microsoft.com/#view/Microsoft_AAD_ELM/AccessPackageMenuBlade/~/Policies/accessPackageId/$apId"
             }
             default { '#' }
         }
 
         # Action varies by type
+        $groupCount = ([regex]::Matches($f.MembershipRule ?? '', "'[^']+'") | Measure-Object).Count
         $action = switch ($f.ObjectType) {
             'DynamicGroup' {
                 if ($f.RuleComplexity -eq 'Low') {
                     "<span class='action-tag'>Replace rule</span> or <span class='action-tag'>Convert to Assigned</span>"
                 } else {
-                    "<span class='action-tag action-hard'>Replace $($f.RuleComplexity) rule</span> — $( ([regex]::Matches($f.MembershipRule, "'[^']+'") | Measure-Object).Count ) groups to replicate"
+                    "<span class='action-tag action-hard'>Replace $($f.RuleComplexity) rule</span> — $groupCount group$(if($groupCount -ne 1){'s'}) to replicate"
                 }
             }
             'DynamicAdminUnit' {
                 if ($f.RuleComplexity -eq 'Low') {
                     "<span class='action-tag'>Replace rule</span> or <span class='action-tag'>Convert to Assigned</span>"
                 } else {
-                    "<span class='action-tag action-hard'>Replace $($f.RuleComplexity) rule</span>"
+                    "<span class='action-tag action-hard'>Replace $($f.RuleComplexity) rule</span> — $groupCount group$(if($groupCount -ne 1){'s'}) to replicate"
                 }
             }
             'EMAutoAssignPolicy' {
@@ -71,15 +74,15 @@ function Export-EMOSHtmlReport {
             $badges -join ' '
         } else { '<span style="color:#bdc3c7">—</span>' }
 
+        # Store raw ObjectType in a hidden span so DataTables can search/filter on it
         "<tr>
-          <td data-type='$($f.ObjectType)'>$typeIcon<br><small>$(($f.ObjectType -replace 'Dynamic','').ToUpper())</small></td>
+          <td><span class='dt-type' style='display:none'>$($f.ObjectType)</span>$typeIcon<br><small>$(($f.ObjectType -replace 'Dynamic','').ToUpper())</small></td>
           <td><a href='$portalLink' target='_blank' class='obj-link'>$($f.DisplayName)</a><br><small class='obj-id'>$($f.ObjectId)</small></td>
           <td><code>$rule</code></td>
           <td data-order='$(if($f.RuleComplexity -eq 'High'){3}elseif($f.RuleComplexity -eq 'Medium'){2}else{1})'><span class='$complexityClass'>$($f.RuleComplexity)</span></td>
           <td>$action</td>
           <td>$blastCell</td>
         </tr>"
-    }
 
     $html = @"
 <!DOCTYPE html>
@@ -204,10 +207,12 @@ var table;
   });
 
   \$('#filter-type').on('change', function() {
-    table.column(0).search(this.value).draw();
+    // Search the hidden .dt-type span text in column 0
+    table.column(0).search(this.value, false, false).draw();
   });
   \$('#filter-complexity').on('change', function() {
-    table.column(3).search(this.value).draw();
+    // Search the visible span text in column 3
+    table.column(3).search(this.value, false, false).draw();
   });
   \$('#filter-search').on('input', function() {
     table.search(this.value).draw();
