@@ -6,25 +6,31 @@ function Invoke-EMOSReport {
         Aggregates results from all three scanners (groups, AUs, EM policies),
         enriches with blast-radius data, and exports HTML + CSV + JSON reports.
     .PARAMETER OutputPath
-        Directory where report files are saved. Defaults to current directory.
+        Directory where report files are saved. Defaults to an EMOS-Reports folder
+        in the user's home directory ($HOME/EMOS-Reports).
     .PARAMETER IncludeOwners
         Retrieve owner/admin details (slower but richer output).
     .PARAMETER NoHtml
         Skip HTML report generation.
     .EXAMPLE
-        Invoke-EMOSReport -OutputPath C:\Reports
+        Invoke-EMOSReport
     .EXAMPLE
-        Connect-EMOS; Invoke-EMOSReport -IncludeOwners
+        Invoke-EMOSReport -OutputPath "$HOME/EMOS-Reports" -IncludeOwners
     #>
     [CmdletBinding()]
     param(
-        [string]$OutputPath = (Get-Location).Path,
+        [string]$OutputPath = (Join-Path $HOME 'EMOS-Reports'),
         [switch]$IncludeOwners,
         [switch]$NoHtml
     )
 
     $timestamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
     $deadlineDays = [int](($script:EMOS_RETIREMENT_DATE - (Get-Date)).TotalDays)
+
+    # Ensure output directory exists
+    if (-not (Test-Path $OutputPath)) {
+        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+    }
 
     Write-Host "`nEMOS - Entra MemberOf Scanner" -ForegroundColor Cyan
     Write-Host "Retirement deadline: $($script:EMOS_RETIREMENT_DATE.ToString('yyyy-MM-dd')) ($deadlineDays days remaining)" -ForegroundColor $(if ($deadlineDays -lt 30) { 'Red' } elseif ($deadlineDays -lt 90) { 'Yellow' } else { 'Green' })

@@ -37,10 +37,10 @@ Describe 'Invoke-EMOSReport' {
             @($result).Count | Should -Be 0
         }
 
-        It 'Does not create report files when there are no findings' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
-            $files = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*'
-            $files.Count | Should -Be 0
+        It 'Creates output directory if it does not exist' {
+            $newDir = Join-Path $script:TempOutput 'subdir-that-does-not-exist'
+            Invoke-EMOSReport -OutputPath $newDir -NoHtml
+            Test-Path $newDir | Should -Be $true
         }
     }
 

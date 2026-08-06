@@ -31,10 +31,10 @@ Install-Module EMOS -Scope CurrentUser
 Connect-EMOS
 
 # Run full scan and generate report
-Invoke-EMOSReport -OutputPath C:\Reports -IncludeOwners
+Invoke-EMOSReport -IncludeOwners
 ```
 
-Output files created in `C:\Reports`:
+Output files created in `$HOME/EMOS-Reports/`:
 - `EMOS-Report-<timestamp>.html` — interactive dashboard
 - `EMOS-Report-<timestamp>.csv`  — for bulk remediation tracking
 - `EMOS-Report-<timestamp>.json` — for pipeline consumers
