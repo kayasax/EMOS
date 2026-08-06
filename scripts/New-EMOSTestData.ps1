@@ -38,15 +38,17 @@ $ErrorActionPreference = 'Stop'
 Import-Module Microsoft.Graph.Authentication -Force
 
 #region ── Auth ──────────────────────────────────────────────────────────────
+$requiredScopes = @(
+    'Group.ReadWrite.All'
+    'AdministrativeUnit.ReadWrite.All'
+    'EntitlementManagement.ReadWrite.All'
+    'Directory.ReadWrite.All'
+)
 $ctx = Get-MgContext -ErrorAction SilentlyContinue
-if (-not $ctx) {
-    Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Cyan
-    Connect-MgGraph -TenantId $TenantId -Scopes @(
-        'Group.ReadWrite.All'
-        'AdministrativeUnit.ReadWrite.All'
-        'EntitlementManagement.ReadWrite.All'
-        'Directory.ReadWrite.All'
-    ) -NoWelcome
+$missingScopes = $requiredScopes | Where-Object { $_ -notin @($ctx.Scopes) }
+if (-not $ctx -or $missingScopes) {
+    if ($missingScopes) { Write-Host "Reconnecting — missing scopes: $($missingScopes -join ', ')" -ForegroundColor Yellow }
+    Connect-MgGraph -TenantId $TenantId -Scopes $requiredScopes -NoWelcome
 }
 Write-Host "Connected: $((Get-MgContext).Account) | $((Get-MgContext).TenantId)" -ForegroundColor Green
 #endregion
@@ -263,13 +265,13 @@ Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor 
 #region ── Summary ───────────────────────────────────────────────────────────
 Write-Host "`n=== TEST DATA SUMMARY ===" -ForegroundColor Cyan
 Write-Host "Dynamic Groups : $($groupResults.Count)"
-Write-Host "  Low    : $(($groupResults | Where-Object Complexity -eq 'Low').Count)"
-Write-Host "  Medium : $(($groupResults | Where-Object Complexity -eq 'Medium').Count)"
-Write-Host "  High   : $(($groupResults | Where-Object Complexity -eq 'High').Count)"
+Write-Host "  Low    : $(@($groupResults | Where-Object Complexity -eq 'Low').Count)"
+Write-Host "  Medium : $(@($groupResults | Where-Object Complexity -eq 'Medium').Count)"
+Write-Host "  High   : $(@($groupResults | Where-Object Complexity -eq 'High').Count)"
 Write-Host "Admin Units    : $($auResults.Count)"
-Write-Host "  Low    : $(($auResults | Where-Object Complexity -eq 'Low').Count)"
-Write-Host "  Medium : $(($auResults | Where-Object Complexity -eq 'Medium').Count)"
-Write-Host "  High   : $(($auResults | Where-Object Complexity -eq 'High').Count)"
+Write-Host "  Low    : $(@($auResults | Where-Object Complexity -eq 'Low').Count)"
+Write-Host "  Medium : $(@($auResults | Where-Object Complexity -eq 'Medium').Count)"
+Write-Host "  High   : $(@($auResults | Where-Object Complexity -eq 'High').Count)"
 Write-Host "EM Policies    : $($apResults.Count)"
 Write-Host "`nRun 'Invoke-EMOSReport' to scan, then 'Remove-EMOSTestData.ps1' to clean up."
 #endregion
