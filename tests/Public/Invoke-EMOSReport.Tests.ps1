@@ -51,6 +51,7 @@ Describe 'Invoke-EMOSReport' {
             $fakeGroup = [PSCustomObject]@{
                 ObjectType     = 'DynamicGroup'; ObjectId = 'g1'; DisplayName = 'MemberOf Group'
                 MembershipRule = 'memberOf("g1")'; RuleComplexity = 'Low'; Owners = ''
+                HasLicenses    = $false
                 SuggestedAction= 'Replace-Rule or Convert-to-Assigned'; DeadlineDays = 89; BlastRadius = ''
             }
             $fakeAU = [PSCustomObject]@{
@@ -123,6 +124,7 @@ Describe 'Invoke-EMOSReport' {
             $fakeGroup = [PSCustomObject]@{
                 ObjectType     = 'DynamicGroup'; ObjectId = $groupId; DisplayName = 'CA Group'
                 MembershipRule = 'memberOf("g1")'; RuleComplexity = 'Low'; Owners = ''
+                HasLicenses    = $false
                 SuggestedAction= 'Replace-Rule or Convert-to-Assigned'; DeadlineDays = 89; BlastRadius = ''
             }
             Mock Get-EMOSAffectedGroups    { return @($fakeGroup) }
@@ -136,6 +138,90 @@ Describe 'Invoke-EMOSReport' {
             $result = Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
             ($result | Where-Object ObjectId -eq 'ca-targeted-group').BlastRadius | Should -Be 'ConditionalAccess'
         }
+
+        It 'Adds Licensing blast radius when group-based licensing is detected' {
+            $groupId = 'licensed-group'
+            $licensedGroup = [PSCustomObject]@{
+                ObjectType     = 'DynamicGroup'; ObjectId = $groupId; DisplayName = 'Licensed Group'
+                MembershipRule = 'memberOf("g1")'; RuleComplexity = 'Low'; Owners = ''
+                HasLicenses    = $true
+                SuggestedAction= 'Replace-Rule or Convert-to-Assigned'; DeadlineDays = 89; BlastRadius = ''
+            }
+
+            Mock Get-EMOSAffectedGroups    { return @($licensedGroup) }
+            Mock Get-EMOSAffectedAdminUnits{ return @() }
+            Mock Get-EMOSAffectedEMPolicies{ return @() }
+            Mock Get-EMOSCATargetedGroupIds{ return @() }
+
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
+            ($result | Where-Object ObjectId -eq $groupId).BlastRadius | Should -Be 'Licensing'
+        }
+
+        It 'Combines ConditionalAccess and Licensing tags when both apply' {
+            $groupId = 'combined-group'
+            $combinedGroup = [PSCustomObject]@{
+                ObjectType     = 'DynamicGroup'; ObjectId = $groupId; DisplayName = 'Combined Group'
+                MembershipRule = 'memberOf("g1")'; RuleComplexity = 'Low'; Owners = ''
+                HasLicenses    = $true
+                SuggestedAction= 'Replace-Rule or Convert-to-Assigned'; DeadlineDays = 89; BlastRadius = ''
+            }
+
+            Mock Get-EMOSAffectedGroups    { return @($combinedGroup) }
+            Mock Get-EMOSAffectedAdminUnits{ return @() }
+            Mock Get-EMOSAffectedEMPolicies{ return @() }
+            Mock Get-EMOSCATargetedGroupIds{ return @($groupId) }
+
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
+            ($result | Where-Object ObjectId -eq $groupId).BlastRadius | Should -Be 'ConditionalAccess, Licensing'
+        }
+    }
+
+    Context 'HTML report rendering' {
+        BeforeEach {
+            Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*' | Remove-Item -Force -ErrorAction SilentlyContinue
+            $fakeGroup = [PSCustomObject]@{
+                ObjectType     = 'DynamicGroup'; ObjectId = 'g1'; DisplayName = 'MemberOf Group'
+                MembershipRule = "user.memberof -any (group.objectId -in ['g1','g2','g3'])"; RuleComplexity = 'High'; Owners = ''
+                HasLicenses    = $true
+                SuggestedAction= 'Replace-Rule or Convert-to-Assigned'; DeadlineDays = 89; BlastRadius = ''
+            }
+            $fakeAU = [PSCustomObject]@{
+                ObjectType     = 'DynamicAdminUnit'; ObjectId = 'au1'; DisplayName = 'MemberOf AU'
+                MembershipRule = 'memberOf("au1")'; RuleComplexity = 'Low'; Description = ''
+                SuggestedAction= 'Replace-Rule or Convert-to-Assigned'; DeadlineDays = 89; BlastRadius = ''
+            }
+            $fakePolicy = [PSCustomObject]@{
+                ObjectType       = 'EMAutoAssignPolicy'; ObjectId = 'policy1'; DisplayName = 'Policy'
+                MembershipRule   = 'memberOf("g1")'; RuleComplexity = 'Low'
+                AccessPackageId  = 'package-1'
+                SuggestedAction  = 'Update auto-assignment filter'; DeadlineDays = 89; BlastRadius = ''
+            }
+
+            Mock Get-EMOSAffectedGroups    { return @($fakeGroup) }
+            Mock Get-EMOSAffectedAdminUnits{ return @($fakeAU) }
+            Mock Get-EMOSAffectedEMPolicies{ return @($fakePolicy) }
+            Mock Get-EMOSCATargetedGroupIds{ return @('g1') }
+            Mock Write-Host { }
+        }
+
+        It 'Uses the updated blast radius tooltip text' {
+            Invoke-EMOSReport -OutputPath $script:TempOutput
+            $html = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html' | Select-Object -Last 1
+            $content = Get-Content $html.FullName -Raw
+
+            $content | Should -Match ([regex]::Escape('Objects whose stale membership could impact CA policy enforcement, EM access package assignments, or AU-scoped admin roles. Licensing impact is detected separately.'))
+        }
+
+        It 'Adds portal edit links in the suggested action column' {
+            Invoke-EMOSReport -OutputPath $script:TempOutput
+            $html = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html' | Select-Object -Last 1
+            $content = Get-Content $html.FullName -Raw
+
+            $content | Should -Match ([regex]::Escape("class='portal-link'>→ Edit rule</a>"))
+            $content | Should -Match ([regex]::Escape("class='portal-link'>→ Edit policy</a>"))
+            $content | Should -Match ([regex]::Escape("GroupDetailsMenuBlade/~/DynamicMembership/groupId/g1"))
+            $content | Should -Match ([regex]::Escape("AdministrativeUnitEditMenuBlade/~/DynamicMembership/objectId/au1"))
+            $content | Should -Match ([regex]::Escape("AccessPackageMenuBlade/~/Policies/accessPackageId/package-1"))
+        }
     }
 }
-

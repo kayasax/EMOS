@@ -39,6 +39,13 @@ function Get-EMOSAffectedGroups {
             catch { Write-Warning "Could not retrieve owners for group $($group.displayName)" }
         }
 
+        $hasLicenses = $false
+        try {
+            $licenses = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/groups/$($group.id)/assignedLicenses"
+            $hasLicenses = @($licenses).Count -gt 0
+        }
+        catch { }
+
         [PSCustomObject]@{
             ObjectType       = 'DynamicGroup'
             ObjectId         = $group.id
@@ -47,6 +54,7 @@ function Get-EMOSAffectedGroups {
             RuleComplexity   = Get-EMOSRuleComplexity -Rule $group.membershipRule
             CreatedDateTime  = $group.createdDateTime
             Owners           = $owners -join '; '
+            HasLicenses      = $hasLicenses
             SuggestedAction  = Get-EMOSSuggestedAction -Rule $group.membershipRule -ObjectType 'Group'
             DeadlineDays     = [int](($script:EMOS_RETIREMENT_DATE - (Get-Date)).TotalDays)
             BlastRadius      = ''   # populated by Invoke-EMOSReport

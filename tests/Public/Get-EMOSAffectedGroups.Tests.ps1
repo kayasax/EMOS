@@ -64,6 +64,7 @@ Describe 'Get-EMOSAffectedGroups' {
             $obj.PSObject.Properties.Name | Should -Contain 'DisplayName'
             $obj.PSObject.Properties.Name | Should -Contain 'MembershipRule'
             $obj.PSObject.Properties.Name | Should -Contain 'RuleComplexity'
+            $obj.PSObject.Properties.Name | Should -Contain 'HasLicenses'
             $obj.PSObject.Properties.Name | Should -Contain 'SuggestedAction'
             $obj.PSObject.Properties.Name | Should -Contain 'DeadlineDays'
             $obj.PSObject.Properties.Name | Should -Contain 'BlastRadius'
@@ -139,6 +140,39 @@ Describe 'Get-EMOSAffectedGroups' {
             $result[0].Owners | Should -Be ''
         }
     }
-}
 
+    Context 'Group-based licensing detection' {
+        BeforeEach {
+            $licensedGroup = New-MockGroup -Id 'licensed-group' -DisplayName 'Licensed Group' -MembershipRule 'user.memberof -any (group.objectId -in [''g1''])'
+            Mock Invoke-EMOSGraphRequest {
+                param($Uri)
+                if ($Uri -like '*assignedLicenses') {
+                    return @([PSCustomObject]@{ skuId = 'sku-1' })
+                }
+                return @($licensedGroup)
+            }
+            Mock Write-Progress { }
+            Mock Write-Verbose  { }
+        }
+
+        It 'Sets HasLicenses when assigned licenses exist' {
+            $result = Get-EMOSAffectedGroups
+            $result[0].HasLicenses | Should -Be $true
+        }
+
+        It 'Leaves HasLicenses false when license lookup fails' {
+            $unlicensedGroup = New-MockGroup -Id 'unlicensed-group' -DisplayName 'Unlicensed Group' -MembershipRule 'user.memberof -any (group.objectId -in [''g2''])'
+            Mock Invoke-EMOSGraphRequest {
+                param($Uri)
+                if ($Uri -like '*assignedLicenses') {
+                    throw 'Graph error'
+                }
+                return @($unlicensedGroup)
+            }
+
+            $result = Get-EMOSAffectedGroups
+            $result[0].HasLicenses | Should -Be $false
+        }
+    }
+}
 

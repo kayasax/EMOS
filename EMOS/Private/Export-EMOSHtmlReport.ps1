@@ -35,10 +35,10 @@ function Export-EMOSHtmlReport {
         # Direct Entra portal links per object type
         $portalLink = switch ($f.ObjectType) {
             'DynamicGroup' {
-                "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Overview/groupId/$($f.ObjectId)"
+                "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/DynamicMembership/groupId/$($f.ObjectId)"
             }
             'DynamicAdminUnit' {
-                "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AdministrativeUnitEditMenuBlade/~/Overview/objectId/$($f.ObjectId)"
+                "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AdministrativeUnitEditMenuBlade/~/DynamicMembership/objectId/$($f.ObjectId)"
             }
             'EMAutoAssignPolicy' {
                 "https://entra.microsoft.com/#view/Microsoft_AAD_ELM/AccessPackageMenuBlade/~/Policies/accessPackageId/$apId"
@@ -48,7 +48,7 @@ function Export-EMOSHtmlReport {
 
         # Action varies by type
         $groupCount = ([regex]::Matches($f.MembershipRule ?? '', "'[^']+'") | Measure-Object).Count
-        $action = switch ($f.ObjectType) {
+        $actionTag = switch ($f.ObjectType) {
             'DynamicGroup' {
                 if ($f.RuleComplexity -eq 'Low') {
                     "<span class='action-tag'>Replace rule</span> or <span class='action-tag'>Convert to Assigned</span>"
@@ -68,6 +68,13 @@ function Export-EMOSHtmlReport {
             }
             default { $f.SuggestedAction }
         }
+        $portalLabel = switch ($f.ObjectType) {
+            'EMAutoAssignPolicy' { '→ Edit policy' }
+            'DynamicGroup' { '→ Edit rule' }
+            'DynamicAdminUnit' { '→ Edit rule' }
+            default { '→ Edit in portal' }
+        }
+        $action = "$actionTag <a href='$portalLink' target='_blank' class='portal-link'>$portalLabel</a>"
 
         $blastCell = if ($f.BlastRadius) {
             $badges = $f.BlastRadius.Split(',') | ForEach-Object { "<span class='badge blast'>$($_.Trim())</span>" }
@@ -128,6 +135,8 @@ function Export-EMOSHtmlReport {
   .complexity-low  { color: #27ae60; }
   .action-tag { display: inline-block; background: #eaf4fb; color: #2980b9; border-radius: 4px; padding: 2px 7px; font-size: .82em; margin: 1px; }
   .action-tag.action-hard { background: #fdedec; color: #c0392b; }
+  .portal-link { color: #2980b9; font-size: .82em; text-decoration: none; margin-left: 4px; }
+  .portal-link:hover { text-decoration: underline; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: .78em; font-weight: bold; white-space: nowrap; }
   .badge.blast { background: #fadbd8; color: #c0392b; }
   footer { padding: 16px 40px; font-size: .8em; color: #95a5a6; border-top: 1px solid #ecf0f1; margin-top: 20px; }
@@ -147,7 +156,7 @@ function Export-EMOSHtmlReport {
     <div class="card"><h2>$(@($Findings | Where-Object ObjectType -eq 'DynamicAdminUnit').Count)</h2><p>Admin Units</p></div>
     <div class="card"><h2>$(@($Findings | Where-Object ObjectType -eq 'EMAutoAssignPolicy').Count)</h2><p>EM Policies</p></div>
     <div class="card"><h2>$caTargeted</h2><p title="Groups targeted by Conditional Access policies. Stale membership may cause access enforcement gaps.">CA-targeted ⓘ</p></div>
-    <div class="card"><h2>$blastCount</h2><p title="Objects whose stale membership could impact: CA policies, licensing, EM assignments, or AU-scoped admin roles.">Blast radius ⓘ</p><div class="tip">wider impact risk</div></div>
+    <div class="card"><h2>$blastCount</h2><p title="Objects whose stale membership could impact CA policy enforcement, EM access package assignments, or AU-scoped admin roles. Licensing impact is detected separately.">Blast radius ⓘ</p><div class="tip">wider impact risk</div></div>
   </div>
 
   <div class="toolbar">

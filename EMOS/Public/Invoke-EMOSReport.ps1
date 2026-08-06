@@ -51,6 +51,7 @@ function Invoke-EMOSReport {
     foreach ($g in $groups) {
         $tags = @()
         if ($caGroupIds -contains $g.ObjectId) { $tags += 'ConditionalAccess' }
+        if ($g.HasLicenses) { $tags += 'Licensing' }
         $g.BlastRadius = $tags -join ', '
     }
 
