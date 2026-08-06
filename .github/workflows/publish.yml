@@ -1,0 +1,67 @@
+name: Publish to PSGallery
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Publish Module
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pester (gate before publish)
+        shell: pwsh
+        run: Install-Module Pester -MinimumVersion 5.0 -Force -SkipPublisherCheck -Scope CurrentUser
+
+      - name: Run tests (must pass before publish)
+        shell: pwsh
+        run: |
+          $null = New-Item -ItemType Directory -Path ./tests/TestResults -Force
+
+          $config = New-PesterConfiguration
+          $config.Run.Path             = './tests'
+          $config.Run.PassThru         = $true
+          $config.Filter.ExcludeTag    = @('Integration')
+          $config.Output.Verbosity     = 'Normal'
+          $config.TestResult.Enabled   = $true
+          $config.TestResult.OutputPath= './tests/TestResults/results.xml'
+
+          $result = Invoke-Pester -Configuration $config
+          if ($result.FailedCount -gt 0) {
+            Write-Error "Tests failed — aborting publish."
+            exit 1
+          }
+
+      - name: Extract version from release tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"          # e.g. v0.2.1
+          $version = $tag -replace '^v', ''         # e.g. 0.2.1
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Publishing version: $version"
+
+      - name: Stamp version into module manifest
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          Update-ModuleManifest -Path ./EMOS/EMOS.psd1 -ModuleVersion $version
+          Write-Host "Manifest updated to $version"
+
+      - name: Validate module manifest
+        shell: pwsh
+        run: |
+          $manifest = Test-ModuleManifest -Path ./EMOS/EMOS.psd1 -ErrorAction Stop
+          Write-Host "Manifest valid: $($manifest.Name) v$($manifest.Version)"
+
+      - name: Publish to PSGallery
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          Publish-Module -Path ./EMOS -NuGetApiKey $env:PSGALLERY_API_KEY -Verbose
+          Write-Host "✅ Published EMOS v${{ steps.version.outputs.VERSION }} to PSGallery"

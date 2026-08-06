@@ -10,7 +10,10 @@ function Get-EMOSRuleComplexity {
     $operatorCount = ([regex]::Matches($Rule, '-and|-or|-not') | Measure-Object).Count
     $memberOfCount = ([regex]::Matches($Rule, '(?i)\bmemberOf\s*\(') | Measure-Object).Count
 
-    if ($memberOfCount -gt 2 -or $operatorCount -gt 5) { return 'High' }
-    if ($memberOfCount -gt 1 -or $operatorCount -gt 2) { return 'Medium' }
+    # Weighted complexity: each memberOf clause counts double (harder to replace)
+    $score = ($memberOfCount * 2) + $operatorCount
+
+    if ($score -ge 8) { return 'High' }
+    if ($score -ge 4) { return 'Medium' }
     return 'Low'
 }

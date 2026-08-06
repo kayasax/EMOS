@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    name: Pester Tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.0 -Force -SkipPublisherCheck -Scope CurrentUser
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $null = New-Item -ItemType Directory -Path ./tests/TestResults -Force
+
+          $config = New-PesterConfiguration
+          $config.Run.Path                           = './tests'
+          $config.Run.PassThru                       = $true
+          $config.Filter.ExcludeTag                  = @('Integration')
+          $config.Output.Verbosity                   = 'Detailed'
+          $config.TestResult.Enabled                 = $true
+          $config.TestResult.OutputFormat            = 'NUnitXml'
+          $config.TestResult.OutputPath              = './tests/TestResults/results.xml'
+          $config.CodeCoverage.Enabled               = $true
+          $config.CodeCoverage.Path                  = @('./EMOS/Public/*.ps1','./EMOS/Private/*.ps1')
+          $config.CodeCoverage.OutputPath            = './tests/TestResults/coverage.xml'
+          $config.CodeCoverage.OutputFormat          = 'JaCoCo'
+          $config.CodeCoverage.CoveragePercentTarget = 70
+
+          $result = Invoke-Pester -Configuration $config
+
+          if ($result.FailedCount -gt 0) {
+            Write-Error "❌ $($result.FailedCount) test(s) failed."
+            exit 1
+          }
+
+          Write-Host "✅ All $($result.PassedCount) tests passed."
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Pester Results
+          path: tests/TestResults/results.xml
+          reporter: java-junit
+          fail-on-error: true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: tests/TestResults/coverage.xml
