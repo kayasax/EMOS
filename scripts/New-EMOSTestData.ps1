@@ -169,95 +169,11 @@ Write-Host "Created: $($auResults.Count)/$AUCount AUs" -ForegroundColor Green
 #endregion
 
 #region ── 4. EM Access Package Policies ─────────────────────────────────────
-Write-Host "`n[4/4] Creating $APCount EM access package auto-assignment policies..." -ForegroundColor Cyan
-Write-Host "  Note: Requires Entra ID Governance / P2 license + Identity Governance Administrator role." -ForegroundColor DarkGray
-
+Write-Host "`n[4/4] EM access package policies skipped." -ForegroundColor DarkGray
+Write-Host "  EM test data requires catalog owner role assignment via Graph which varies by tenant." -ForegroundColor DarkGray
+Write-Host "  Create EM test data manually via the Entra portal if needed." -ForegroundColor DarkGray
 $apResults = [System.Collections.Generic.List[PSCustomObject]]::new()
-$catalog   = $null
-
-try {
-    # Reuse existing EMOS_TestCatalog to avoid orphans on repeated runs
-    $existing = (Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'EMOS_TestCatalog'" `
-        -OutputType PSObject -ErrorAction Stop).value
-
-    if ($existing) {
-        $catalog = $existing[0]
-        Write-Host "  ↩ Reusing existing catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
-    } else {
-        $catalog = Invoke-GraphPost `
-            -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
-            -Body @{ displayName = 'EMOS_TestCatalog'; description = 'EMOS integration test catalog'; isExternallyVisible = $false }
-        Write-Host "  ✓ Catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
-
-        # Add current user as catalog owner — required to create packages via API
-        # (portal does this automatically; Graph API does not)
-        $currentUserId = (Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/me?$select=id' -OutputType PSObject).id
-        Invoke-MgGraphRequest -Method POST `
-            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($catalog.id)/accessPackageResourceRoleScopes" `
-            -ErrorAction SilentlyContinue | Out-Null
-        # Assign catalog owner role
-        Invoke-MgGraphRequest -Method POST `
-            -Uri "https://graph.microsoft.com/beta/roleManagement/entitlementManagement/roleAssignments" `
-            -Body (@{
-                principalId      = $currentUserId
-                roleDefinitionId = 'ae79f266-94d4-4dab-b730-feca7e132178'  # Catalog owner
-                appScopeId       = "/AccessPackageCatalog/$($catalog.id)"
-            } | ConvertTo-Json) -ContentType 'application/json' -OutputType PSObject | Out-Null
-        Write-Host "  ✓ Added current user as catalog owner" -ForegroundColor DarkGray
-    }
-
-    for ($i = 1; $i -le $APCount; $i++) {
-        $complexity = switch (($i % 3)) { 0 { 1 } 1 { 2 } 2 { 3 } }
-        $label      = Get-ComplexityLabel $complexity
-        $pkgName    = "EMOS_AP_{0:D2}_{1}" -f $i, $label
-
-        if ($PSCmdlet.ShouldProcess($pkgName, 'Create access package + policy')) {
-            $pkg = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages' `
-                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; catalog = @{ id = $catalog.id } }
-
-            $groupIds   = 1..$complexity | ForEach-Object { [guid]::NewGuid().ToString() }
-            $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
-
-            $policy = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/assignmentPolicies' `
-                -Body @{
-                    displayName        = "${pkgName}_AutoPolicy"
-                    description        = 'EMOS test auto-assignment policy'
-                    accessPackage      = @{ id = $pkg.id }
-                    allowedTargetScope = 'allMemberUsers'
-                    automaticRequestSettings = @{
-                        requestorFilterType                    = 'IncludeAll'
-                        requestorFilterExpression              = $filterExpr
-                        enableOnBehalfRequestorsToAddAccess    = $true
-                        enableOnBehalfRequestorsToUpdateAccess = $true
-                        enableOnBehalfRequestorsToRemoveAccess = $true
-                        onBehalfRequestors                     = @()
-                    }
-                }
-            $apResults.Add([PSCustomObject]@{ Name = $pkgName; PolicyId = $policy.id; Complexity = $label })
-            Write-Host "  ✓ $pkgName ($($policy.id))" -ForegroundColor DarkGray
-        }
-    }
-}
-catch {
-    # Clean up catalog ONLY if we just created it (not a reused one) and packages failed
-    if ($catalog -and -not $existing -and $apResults.Count -eq 0) {
-        Invoke-MgGraphRequest -Method DELETE `
-            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($catalog.id)" `
-            -ErrorAction SilentlyContinue
-        Write-Host "  ↩ Cleaned up empty catalog." -ForegroundColor DarkGray
-    }
-    if ($_ -match '403|Forbidden|Unauthorized|UnAuthorized') {
-        Write-Warning "EM skipped: requires Entra ID P2/Governance license AND Identity Governance Administrator role."
-    } elseif ($_ -match 'Resource not found|BadRequest') {
-        Write-Warning "EM skipped: Entitlement Management not available on this tenant."
-    } else {
-        Write-Warning "EM policy creation failed: $_"
-    }
-}
-Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor $(if ($apResults.Count -eq $APCount) { 'Green' } else { 'Yellow' })
+Write-Host "Created: 0/$APCount EM policies (skipped)" -ForegroundColor Yellow
 #endregion
 
 #region ── Summary ───────────────────────────────────────────────────────────
