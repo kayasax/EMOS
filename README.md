@@ -27,6 +27,9 @@ The [Microsoft retirement announcement](https://learn.microsoft.com/entra/identi
 # Install
 Install-Module EMOS -Scope CurrentUser
 
+# If your Documents folder syncs via OneDrive (files appear delayed), use:
+# Save-Module EMOS -Path "$env:LOCALAPPDATA\powershell\Modules" -Force
+
 # Connect (interactive browser auth)
 Connect-EMOS
 
@@ -115,3 +118,4 @@ Issues and PRs welcome. See [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 ## License
 
 MIT © Loic Michel
+
