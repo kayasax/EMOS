@@ -7,7 +7,7 @@ BeforeAll {
     . "$root\EMOS\Private\Invoke-EMOSGraphRequest.ps1"
     . "$root\EMOS\Public\Get-EMOSAffectedEMPolicies.ps1"
 
-    $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
+    $script:MEMBEROF_PATTERN = [regex]'(?i)\b(user|device)\.memberof\b|\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
 
     function Invoke-MgGraphRequest { throw "stub - must be mocked" }
@@ -18,9 +18,9 @@ Describe 'Get-EMOSAffectedEMPolicies' {
     Context 'Filtering — only MemberOf policies returned' {
         BeforeEach {
             $policies = @(
-                New-MockEMPolicy -DisplayName 'MemberOf Policy' -RuleJson '"memberOf(\"g1\")"'
+                New-MockEMPolicy -DisplayName 'MemberOf Policy' -RuleJson '"user.memberof -any (group.objectId -in ['g1'])"'
                 New-MockEMPolicy -DisplayName 'No MemberOf'     -RuleJson '"user.department -eq \"HR\""'
-                New-MockEMPolicy -DisplayName 'Mixed Policy'    -RuleJson '"memberOf(\"g2\") -and user.city -eq \"Paris\""'
+                New-MockEMPolicy -DisplayName 'Mixed Policy'    -RuleJson '"user.memberof -any (group.objectId -in ['g2'])"'
             )
             $mockResponse = [PSCustomObject]@{ value = $policies; '@odata.nextLink' = $null }
             Mock Invoke-EMOSGraphRequest { return $policies }
@@ -60,7 +60,7 @@ Describe 'Get-EMOSAffectedEMPolicies' {
 
     Context 'Output object shape' {
         BeforeEach {
-            $policy = New-MockEMPolicy -DisplayName 'Shape Test' -RuleJson '"memberOf(\"g1\")"' -PackageName 'Access Pkg A'
+            $policy = New-MockEMPolicy -DisplayName 'Shape Test' -RuleJson '"user.memberof -any (group.objectId -in ['g1'])"' -PackageName 'Access Pkg A'
             Mock Invoke-EMOSGraphRequest { return @($policy) }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
@@ -86,4 +86,6 @@ Describe 'Get-EMOSAffectedEMPolicies' {
         }
     }
 }
+
+
 

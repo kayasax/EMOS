@@ -7,7 +7,7 @@ BeforeAll {
     . "$root\EMOS\Private\Invoke-EMOSGraphRequest.ps1"
     . "$root\EMOS\Public\Get-EMOSAffectedAdminUnits.ps1"
 
-    $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
+    $script:MEMBEROF_PATTERN = [regex]'(?i)\b(user|device)\.memberof\b|\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
 
     # Stub so Pester can mock the helper
@@ -19,9 +19,9 @@ Describe 'Get-EMOSAffectedAdminUnits' {
     Context 'Filtering — only MemberOf AUs returned' {
         BeforeEach {
             $mockAUs = @(
-                New-MockAdminUnit -displayName 'MemberOf AU'  -membershipRule 'memberOf("g1")'
+                New-MockAdminUnit -displayName 'MemberOf AU'  -membershipRule 'user.memberof -any (group.objectId -in [''g1''])'
                 New-MockAdminUnit -displayName 'Standard AU'  -membershipRule 'user.department -eq "HR"'
-                New-MockAdminUnit -displayName 'Mixed AU'     -membershipRule 'memberOf("g2") -and user.city -eq "Lyon"'
+                New-MockAdminUnit -displayName 'Mixed AU'     -membershipRule 'user.memberof -any (group.objectId -in [''g2''])'
             )
             $mockResponse = [PSCustomObject]@{
                 value              = $mockAUs
@@ -47,8 +47,8 @@ Describe 'Get-EMOSAffectedAdminUnits' {
         BeforeEach {
             # Pagination is handled by Invoke-EMOSGraphRequest; scanner receives flat array
             $allAUs = @(
-                New-MockAdminUnit -displayName 'AU Page 1' -membershipRule 'memberOf("g1")'
-                New-MockAdminUnit -displayName 'AU Page 2' -membershipRule 'memberOf("g2")'
+                New-MockAdminUnit -displayName 'AU Page 1' -membershipRule 'user.memberof -any (group.objectId -in [''g1''])'
+                New-MockAdminUnit -displayName 'AU Page 2' -membershipRule 'user.memberof -any (group.objectId -in [''g2''])'
             )
             Mock Invoke-EMOSGraphRequest { return $allAUs }
             Mock Write-Progress { }
@@ -63,7 +63,7 @@ Describe 'Get-EMOSAffectedAdminUnits' {
 
     Context 'Output object shape' {
         BeforeEach {
-            $au = New-MockAdminUnit -displayName 'Shape Test' -membershipRule 'memberOf("g1")'
+            $au = New-MockAdminUnit -displayName 'Shape Test' -membershipRule 'user.memberof -any (group.objectId -in [''g1''])'
             Mock Invoke-EMOSGraphRequest { return @($au) }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
@@ -93,4 +93,6 @@ Describe 'Get-EMOSAffectedAdminUnits' {
         }
     }
 }
+
+
 

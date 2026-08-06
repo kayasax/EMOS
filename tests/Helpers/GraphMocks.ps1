@@ -7,7 +7,6 @@ function New-MockGroup {
         [string]$DisplayName  = 'Test Group',
         [string]$MembershipRule = 'user.department -eq "Sales"'
     )
-    # Use camelCase to match Graph REST API response shape (used by Invoke-EMOSGraphRequest)
     [PSCustomObject]@{
         id              = $Id
         displayName     = $DisplayName
@@ -15,6 +14,26 @@ function New-MockGroup {
         createdDateTime = '2025-01-01T00:00:00Z'
     }
 }
+
+function New-MockAdminUnit {
+    param(
+        [string]$id          = [guid]::NewGuid().ToString(),
+        [string]$displayName = 'Test AU',
+        [string]$membershipRule = 'user.department -eq "HR"',
+        [string]$description = ''
+    )
+    [PSCustomObject]@{
+        id             = $id
+        displayName    = $displayName
+        membershipRule = $membershipRule
+        description    = $description
+        membershipType = 'Dynamic'
+    }
+}
+
+# Real Entra MemberOf rule syntax
+$script:REAL_MEMBEROF_RULE   = "user.memberof -any (group.objectId -in ['2409120030000681', '2409120030000682'])"
+$script:REAL_MEMBEROF_RULE_1 = "user.memberof -any (group.objectId -in ['2409120030000681'])"
 
 function New-MockAdminUnit {
     param(

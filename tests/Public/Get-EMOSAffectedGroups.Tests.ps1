@@ -8,7 +8,7 @@ BeforeAll {
     . "$root\EMOS\Private\Invoke-EMOSGraphRequest.ps1"
     . "$root\EMOS\Public\Get-EMOSAffectedGroups.ps1"
 
-    $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
+    $script:MEMBEROF_PATTERN = [regex]'(?i)\b(user|device)\.memberof\b|\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
 
     # Stubs so Pester can mock them
@@ -20,10 +20,10 @@ Describe 'Get-EMOSAffectedGroups' {
     Context 'Filtering — only MemberOf groups are returned' {
         BeforeEach {
             $mockGroups = @(
-                New-MockGroup -DisplayName 'MemberOf Group'  -MembershipRule 'memberOf("group-a")'
+                New-MockGroup -DisplayName 'MemberOf Group'  -MembershipRule 'user.memberof -any (group.objectId -in [''id-a''])'
                 New-MockGroup -DisplayName 'Standard Group'  -MembershipRule 'user.department -eq "Sales"'
-                New-MockGroup -DisplayName 'Mixed Group'     -MembershipRule 'memberOf("group-b") -and user.city -eq "Paris"'
-                New-MockGroup -DisplayName 'Case Insensitive'-MembershipRule 'MEMBEROF("group-c")'
+                New-MockGroup -DisplayName 'Mixed Group'     -MembershipRule 'user.memberof -any (group.objectId -in [''id-b''])'
+                New-MockGroup -DisplayName 'Case Insensitive'-MembershipRule 'USER.MEMBEROF -any (group.objectId -in [''id-c''])'
             )
 
             Mock Invoke-EMOSGraphRequest { return $mockGroups }
@@ -49,7 +49,7 @@ Describe 'Get-EMOSAffectedGroups' {
 
     Context 'Output object shape' {
         BeforeEach {
-            $mockGroups = @(New-MockGroup -DisplayName 'Shape Test' -MembershipRule 'memberOf("g1")')
+            $mockGroups = @(New-MockGroup -DisplayName 'Shape Test' -MembershipRule 'user.memberof -any (group.objectId -in [''g1''])')
             Mock Invoke-EMOSGraphRequest { return $mockGroups }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
@@ -117,7 +117,7 @@ Describe 'Get-EMOSAffectedGroups' {
 
     Context '-IncludeOwners switch' {
         BeforeEach {
-            $grp = New-MockGroup -MembershipRule 'memberOf("g1")'
+            $grp = New-MockGroup -MembershipRule 'user.memberof -any (group.objectId -in [''g1''])'
             Mock Invoke-EMOSGraphRequest {
                 param($Uri)
                 if ($Uri -match '/owners') {
@@ -140,3 +140,5 @@ Describe 'Get-EMOSAffectedGroups' {
         }
     }
 }
+
+

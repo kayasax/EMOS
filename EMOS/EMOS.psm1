@@ -15,6 +15,11 @@ foreach ($file in @($Private + $Public)) {
 
 # Module-level constants
 $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
-$script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
+
+# Real MemberOf rule syntax used by Entra ID:
+#   user.memberof -any (group.objectId -in ['id1', 'id2'])
+#   device.memberof -any (group.objectId -in ['id1'])
+# Also handles the older docs-style variant: memberOf("id")
+$script:MEMBEROF_PATTERN = [regex]'(?i)\b(user|device)\.memberof\b|\bmemberOf\s*\('
 
 Export-ModuleMember -Function $Public.BaseName

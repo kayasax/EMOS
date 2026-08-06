@@ -11,7 +11,7 @@ BeforeAll {
     . "$root\EMOS\Public\Get-EMOSAffectedEMPolicies.ps1"
     . "$root\EMOS\Public\Invoke-EMOSReport.ps1"
 
-    $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
+    $script:MEMBEROF_PATTERN = [regex]'(?i)\b(user|device)\.memberof\b|\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
 
     $script:TempOutput = Join-Path $env:TEMP "EMOS-Test-$(Get-Random)"
@@ -138,3 +138,4 @@ Describe 'Invoke-EMOSReport' {
         }
     }
 }
+
