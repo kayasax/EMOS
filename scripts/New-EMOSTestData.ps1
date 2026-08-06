@@ -176,7 +176,7 @@ $apResults = [System.Collections.Generic.List[PSCustomObject]]::new()
 try {
     # Use the built-in General catalog — avoids catalog-owner permission issues
     $catalog = (Invoke-MgGraphRequest -Method GET `
-        -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'General'" `
+        -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'General'" `
         -OutputType PSObject -ErrorAction Stop).value | Select-Object -First 1
 
     if (-not $catalog) { throw "General catalog not found — Entitlement Management may not be enabled." }
@@ -190,7 +190,7 @@ try {
         if ($PSCmdlet.ShouldProcess($pkgName, 'Create access package + policy')) {
             # Skip if already exists
             $existingPkg = (Invoke-MgGraphRequest -Method GET `
-                -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages?`$filter=displayName eq '$pkgName'" `
+                -Uri "https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackages?`$filter=displayName eq '$pkgName'" `
                 -OutputType PSObject).value | Select-Object -First 1
             if ($existingPkg) {
                 Write-Host "  ↩ Reusing: $pkgName" -ForegroundColor DarkGray
@@ -199,14 +199,14 @@ try {
             }
 
             $pkg = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages' `
-                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; catalog = @{ id = $catalog.id } }
+                -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackages' `
+                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; catalogId = $catalog.id; isHidden = $false }
 
             $groupIds   = 1..$complexity | ForEach-Object { [guid]::NewGuid().ToString() }
             $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
 
             $policy = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/assignmentPolicies' `
+                -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/assignmentPolicies' `
                 -Body @{
                     displayName        = "${pkgName}_AutoPolicy"
                     description        = 'EMOS test auto-assignment policy'
