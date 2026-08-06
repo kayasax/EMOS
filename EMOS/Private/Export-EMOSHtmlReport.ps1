@@ -17,7 +17,6 @@ function Export-EMOSHtmlReport {
     $blastCount   = @($Findings | Where-Object { $_.BlastRadius -ne '' }).Count
 
     $rows = foreach ($f in $Findings) {
-        $blastBadge = if ($f.BlastRadius) { "<span class='badge blast'>$($f.BlastRadius)</span>" } else { '' }
         $complexityClass = switch ($f.RuleComplexity) {
             'High'   { 'complexity-high' }
             'Medium' { 'complexity-med' }
@@ -30,13 +29,55 @@ function Export-EMOSHtmlReport {
             default              { '❓' }
         }
         $rule = [System.Web.HttpUtility]::HtmlEncode($f.MembershipRule ?? '')
+
+        # Direct Entra portal links per object type
+        $portalLink = switch ($f.ObjectType) {
+            'DynamicGroup' {
+                "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Overview/groupId/$($f.ObjectId)"
+            }
+            'DynamicAdminUnit' {
+                "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AdministrativeUnitEditMenuBlade/~/Overview/objectId/$($f.ObjectId)"
+            }
+            'EMAutoAssignPolicy' {
+                "https://entra.microsoft.com/#view/Microsoft_AAD_ELM/AccessPackageMenuBlade/~/Policies/accessPackageId/$($f.AccessPackageId)"
+            }
+            default { '#' }
+        }
+
+        # Action varies by type
+        $action = switch ($f.ObjectType) {
+            'DynamicGroup' {
+                if ($f.RuleComplexity -eq 'Low') {
+                    "<span class='action-tag'>Replace rule</span> or <span class='action-tag'>Convert to Assigned</span>"
+                } else {
+                    "<span class='action-tag action-hard'>Replace $($f.RuleComplexity) rule</span> — $( ([regex]::Matches($f.MembershipRule, "'[^']+'") | Measure-Object).Count ) groups to replicate"
+                }
+            }
+            'DynamicAdminUnit' {
+                if ($f.RuleComplexity -eq 'Low') {
+                    "<span class='action-tag'>Replace rule</span> or <span class='action-tag'>Convert to Assigned</span>"
+                } else {
+                    "<span class='action-tag action-hard'>Replace $($f.RuleComplexity) rule</span>"
+                }
+            }
+            'EMAutoAssignPolicy' {
+                "<span class='action-tag action-hard'>Update auto-assignment filter</span>"
+            }
+            default { $f.SuggestedAction }
+        }
+
+        $blastCell = if ($f.BlastRadius) {
+            $badges = $f.BlastRadius.Split(',') | ForEach-Object { "<span class='badge blast'>$($_.Trim())</span>" }
+            $badges -join ' '
+        } else { '<span style="color:#bdc3c7">—</span>' }
+
         "<tr>
-          <td>$typeIcon $($f.ObjectType)</td>
-          <td><strong>$($f.DisplayName)</strong><br><small class='obj-id'>$($f.ObjectId)</small></td>
+          <td data-type='$($f.ObjectType)'>$typeIcon<br><small>$(($f.ObjectType -replace 'Dynamic','').ToUpper())</small></td>
+          <td><a href='$portalLink' target='_blank' class='obj-link'>$($f.DisplayName)</a><br><small class='obj-id'>$($f.ObjectId)</small></td>
           <td><code>$rule</code></td>
-          <td><span class='$complexityClass'>$($f.RuleComplexity)</span></td>
-          <td>$($f.SuggestedAction)</td>
-          <td>$blastBadge</td>
+          <td data-order='$(if($f.RuleComplexity -eq 'High'){3}elseif($f.RuleComplexity -eq 'Medium'){2}else{1})'><span class='$complexityClass'>$($f.RuleComplexity)</span></td>
+          <td>$action</td>
+          <td>$blastCell</td>
         </tr>"
     }
 
@@ -48,35 +89,45 @@ function Export-EMOSHtmlReport {
 <title>EMOS Report - $generatedAt</title>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <style>
+  * { box-sizing: border-box; }
   body { font-family: Segoe UI, sans-serif; margin: 0; background: #f4f6f9; color: #2c3e50; }
   header { background: #2c3e50; color: white; padding: 20px 40px; }
   header h1 { margin: 0; font-size: 1.6em; }
   header p  { margin: 4px 0 0; opacity: 0.8; }
   .deadline { display: inline-block; background: $urgencyColor; color: white; padding: 6px 14px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
-  .container { padding: 30px 40px; }
-  .summary { display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; }
-  .card { background: white; border-radius: 8px; padding: 20px 30px; box-shadow: 0 2px 8px rgba(0,0,0,.08); min-width: 160px; text-align: center; }
-  .card h2 { font-size: 2.4em; margin: 0; color: #c0392b; }
-  .card p  { margin: 4px 0 0; font-size: .85em; color: #7f8c8d; }
+  .container { padding: 24px 40px; }
+  .summary { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .card { background: white; border-radius: 8px; padding: 16px 24px; box-shadow: 0 2px 8px rgba(0,0,0,.08); min-width: 130px; text-align: center; }
+  .card h2 { font-size: 2em; margin: 0; color: #c0392b; }
+  .card p  { margin: 4px 0 0; font-size: .82em; color: #7f8c8d; }
+  .card .tip { font-size: .72em; color: #aab; margin-top: 2px; }
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .toolbar label { font-size: .85em; color: #7f8c8d; }
+  .toolbar select, .toolbar input { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; font-size: .9em; }
+  .toolbar input[type=search] { width: 280px; }
+  #findings-clear { font-size: .82em; color: #3498db; cursor: pointer; text-decoration: underline; }
   table.dataTable { width: 100% !important; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-  table.dataTable thead th { background: #34495e; color: white; padding: 12px 16px; font-size: .85em; text-transform: uppercase; letter-spacing: .05em; border-bottom: none; }
+  table.dataTable thead th { background: #34495e !important; color: white; padding: 11px 14px; font-size: .82em; text-transform: uppercase; letter-spacing: .05em; border: none !important; }
   table.dataTable thead th.sorting:after,
   table.dataTable thead th.sorting_asc:after,
-  table.dataTable thead th.sorting_desc:after { color: #aab; }
-  table.dataTable tbody td { padding: 12px 16px; border-bottom: 1px solid #ecf0f1; font-size: .9em; vertical-align: top; }
-  table.dataTable tbody tr:last-child td { border-bottom: none; }
+  table.dataTable thead th.sorting_desc:after { opacity: .7; }
+  table.dataTable tbody td { padding: 10px 14px; border-bottom: 1px solid #ecf0f1 !important; font-size: .88em; vertical-align: top; }
+  table.dataTable tbody tr:last-child td { border-bottom: none !important; }
   table.dataTable tbody tr:hover td { background: #f8f9fa; }
-  .dataTables_wrapper .dataTables_filter input { border: 1px solid #ddd; border-radius: 4px; padding: 5px 10px; margin-left: 6px; }
-  .dataTables_wrapper .dataTables_length select { border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px; }
-  .dataTables_wrapper { margin-bottom: 20px; }
-  code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: .8em; word-break: break-all; }
-  .obj-id { color: #95a5a6; font-size: .8em; }
+  .dataTables_info, .dataTables_paginate { margin-top: 10px; font-size: .85em; }
+  code { background: #f0f0f0; padding: 2px 5px; border-radius: 4px; font-size: .78em; word-break: break-all; display: block; max-width: 340px; }
+  .obj-id { color: #aab; font-size: .78em; }
+  .obj-link { color: #2980b9; text-decoration: none; font-weight: 600; }
+  .obj-link:hover { text-decoration: underline; }
   .complexity-high { color: #c0392b; font-weight: bold; }
   .complexity-med  { color: #e67e22; font-weight: bold; }
   .complexity-low  { color: #27ae60; }
-  .badge { padding: 3px 10px; border-radius: 12px; font-size: .8em; font-weight: bold; }
+  .action-tag { display: inline-block; background: #eaf4fb; color: #2980b9; border-radius: 4px; padding: 2px 7px; font-size: .82em; margin: 1px; }
+  .action-tag.action-hard { background: #fdedec; color: #c0392b; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: .78em; font-weight: bold; white-space: nowrap; }
   .badge.blast { background: #fadbd8; color: #c0392b; }
-  footer { padding: 20px 40px; font-size: .8em; color: #95a5a6; }
+  footer { padding: 16px 40px; font-size: .8em; color: #95a5a6; border-top: 1px solid #ecf0f1; margin-top: 20px; }
+  [title] { cursor: help; border-bottom: 1px dotted #bbb; }
 </style>
 </head>
 <body>
@@ -91,12 +142,34 @@ function Export-EMOSHtmlReport {
     <div class="card"><h2>$(@($Findings | Where-Object ObjectType -eq 'DynamicGroup').Count)</h2><p>Dynamic Groups</p></div>
     <div class="card"><h2>$(@($Findings | Where-Object ObjectType -eq 'DynamicAdminUnit').Count)</h2><p>Admin Units</p></div>
     <div class="card"><h2>$(@($Findings | Where-Object ObjectType -eq 'EMAutoAssignPolicy').Count)</h2><p>EM Policies</p></div>
-    <div class="card"><h2>$caTargeted</h2><p>CA-targeted</p></div>
-    <div class="card"><h2>$blastCount</h2><p>With blast radius</p></div>
+    <div class="card"><h2>$caTargeted</h2><p title="Groups targeted by Conditional Access policies. Stale membership may cause access enforcement gaps.">CA-targeted ⓘ</p></div>
+    <div class="card"><h2>$blastCount</h2><p title="Objects whose stale membership could impact: CA policies, licensing, EM assignments, or AU-scoped admin roles.">Blast radius ⓘ</p><div class="tip">wider impact risk</div></div>
   </div>
-  <table id="findings" class="display">
+
+  <div class="toolbar">
+    <label>Type:</label>
+    <select id="filter-type">
+      <option value="">All</option>
+      <option value="DynamicGroup">👥 Dynamic Groups</option>
+      <option value="DynamicAdminUnit">🏢 Admin Units</option>
+      <option value="EMAutoAssignPolicy">📦 EM Policies</option>
+    </select>
+    <label>Complexity:</label>
+    <select id="filter-complexity">
+      <option value="">All</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+    </select>
+    <label>Search:</label>
+    <input type="search" id="filter-search" placeholder="Filter by name, ID, or rule…">
+    <span id="findings-clear" onclick="clearFilters()">Clear filters</span>
+  </div>
+
+  <table id="findings" class="display" style="width:100%">
     <thead><tr>
-      <th>Type</th><th>Name / ID</th><th>Rule</th><th>Complexity</th><th>Suggested Action</th><th>Blast Radius</th>
+      <th>Type</th><th>Name / ID</th><th>Rule</th><th>Complexity</th><th>Suggested Action</th>
+      <th title="Blast radius: the broader impact if membership becomes stale. CA = Conditional Access, EM = Entitlement Management.">Blast Radius ⓘ</th>
     </tr></thead>
     <tbody>$($rows -join "`n")</tbody>
   </table>
@@ -104,25 +177,49 @@ function Export-EMOSHtmlReport {
 <footer>
   EMOS v0.1.0 · <a href="https://github.com/kayasax/EMOS">github.com/kayasax/EMOS</a> ·
   <a href="https://learn.microsoft.com/entra/identity/users/groups-dynamic-rule-member-of">Microsoft retirement docs</a>
+  &nbsp;·&nbsp; Click any name to open directly in Entra portal
 </footer>
+
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
-  \$(document).ready(function() {
-    \$('#findings').DataTable({
-      pageLength: 25,
-      order: [[3, 'desc']],  // sort by Complexity desc by default
-      columnDefs: [
-        { orderable: false, targets: [1, 2] }  // Name/Rule columns not sortable (too long)
-      ],
-      language: {
-        search: 'Filter:',
-        lengthMenu: 'Show _MENU_ findings',
-        info: 'Showing _START_ to _END_ of _TOTAL_ findings',
-        infoFiltered: '(filtered from _MAX_ total)'
-      }
-    });
+var table;
+\$(document).ready(function() {
+  table = \$('#findings').DataTable({
+    pageLength: 25,
+    order: [[3, 'desc']],
+    columnDefs: [
+      { orderable: false, targets: [1, 2, 4, 5] },
+      { type: 'num', targets: 3 }
+    ],
+    language: {
+      search: '',
+      searchPlaceholder: '',
+      lengthMenu: 'Show _MENU_',
+      info: '_START_–_END_ of _TOTAL_ findings',
+      infoFiltered: ' (filtered from _MAX_)',
+      paginate: { previous: '‹', next: '›' }
+    },
+    dom: 'tip'   // table, info, pagination — search handled by custom toolbar
   });
+
+  \$('#filter-type').on('change', function() {
+    table.column(0).search(this.value).draw();
+  });
+  \$('#filter-complexity').on('change', function() {
+    table.column(3).search(this.value).draw();
+  });
+  \$('#filter-search').on('input', function() {
+    table.search(this.value).draw();
+  });
+});
+
+function clearFilters() {
+  \$('#filter-type').val('');
+  \$('#filter-complexity').val('');
+  \$('#filter-search').val('');
+  table.search('').columns().search('').draw();
+}
 </script>
 </body>
 </html>
