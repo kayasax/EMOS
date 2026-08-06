@@ -119,3 +119,4 @@ Issues and PRs welcome. See [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 MIT © Loic Michel
 
+
