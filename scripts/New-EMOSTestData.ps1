@@ -76,12 +76,19 @@ function Get-ComplexityLabel {
 }
 #endregion
 
-#region ── 1. Source groups (needed for complexity > 1) ─────────────────────
-Write-Host "`n[1/4] Creating source reference groups..." -ForegroundColor Cyan
+#region ── 1. Source groups (idempotent) ─────────────────────────────────────
+Write-Host "`n[1/4] Ensuring source reference groups exist..." -ForegroundColor Cyan
 $sourceGroupIds = @()
 1..3 | ForEach-Object {
     $name = "EMOS_Source_$_"
-    if ($PSCmdlet.ShouldProcess($name, 'Create source group')) {
+    # Reuse if already exists
+    $existing = (Invoke-MgGraphRequest -Method GET `
+        -Uri "https://graph.microsoft.com/v1.0/groups?`$filter=displayName eq '$name'&`$select=id,displayName&`$count=true" `
+        -Headers @{ConsistencyLevel='eventual'} -OutputType PSObject).value
+    if ($existing) {
+        $sourceGroupIds += $existing[0].id
+        Write-Host "  ↩ Reusing: $name ($($existing[0].id))" -ForegroundColor DarkGray
+    } elseif ($PSCmdlet.ShouldProcess($name, 'Create source group')) {
         $g = Invoke-GraphPost -Uri 'https://graph.microsoft.com/v1.0/groups' -Body @{
             displayName     = $name
             mailEnabled     = $false
@@ -163,103 +170,78 @@ Write-Host "Created: $($auResults.Count)/$AUCount AUs" -ForegroundColor Green
 
 #region ── 4. EM Access Package Policies ─────────────────────────────────────
 Write-Host "`n[4/4] Creating $APCount EM access package auto-assignment policies..." -ForegroundColor Cyan
-Write-Host "  Note: Requires Entra ID Governance / P2 license." -ForegroundColor DarkGray
+Write-Host "  Note: Requires Entra ID Governance / P2 license + Identity Governance Administrator role." -ForegroundColor DarkGray
 
 $apResults = [System.Collections.Generic.List[PSCustomObject]]::new()
+$catalog   = $null
 
-# Probe license/permission before creating the catalog
-$emAvailable = $false
 try {
-    $probe = Invoke-MgGraphRequest -Method GET `
-        -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages?$top=1' `
-        -OutputType PSObject -ErrorAction Stop
-    $emAvailable = $true
+    # Reuse existing EMOS_TestCatalog to avoid orphans on repeated runs
+    $existing = (Invoke-MgGraphRequest -Method GET `
+        -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'EMOS_TestCatalog'" `
+        -OutputType PSObject -ErrorAction Stop).value
+
+    if ($existing) {
+        $catalog = $existing[0]
+        Write-Host "  ↩ Reusing existing catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
+    } else {
+        $catalog = Invoke-GraphPost `
+            -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
+            -Body @{ displayName = 'EMOS_TestCatalog'; description = 'EMOS integration test catalog'; isExternallyVisible = $false }
+        Write-Host "  ✓ Catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
+    }
+
+    for ($i = 1; $i -le $APCount; $i++) {
+        $complexity = switch (($i % 3)) { 0 { 1 } 1 { 2 } 2 { 3 } }
+        $label      = Get-ComplexityLabel $complexity
+        $pkgName    = "EMOS_AP_{0:D2}_{1}" -f $i, $label
+
+        if ($PSCmdlet.ShouldProcess($pkgName, 'Create access package + policy')) {
+            $pkg = Invoke-GraphPost `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages' `
+                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; catalog = @{ id = $catalog.id } }
+
+            $groupIds   = 1..$complexity | ForEach-Object { [guid]::NewGuid().ToString() }
+            $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
+
+            $policy = Invoke-GraphPost `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/assignmentPolicies' `
+                -Body @{
+                    displayName        = "${pkgName}_AutoPolicy"
+                    description        = 'EMOS test auto-assignment policy'
+                    accessPackage      = @{ id = $pkg.id }
+                    allowedTargetScope = 'allMemberUsers'
+                    automaticRequestSettings = @{
+                        requestorFilterType                    = 'IncludeAll'
+                        requestorFilterExpression              = $filterExpr
+                        enableOnBehalfRequestorsToAddAccess    = $true
+                        enableOnBehalfRequestorsToUpdateAccess = $true
+                        enableOnBehalfRequestorsToRemoveAccess = $true
+                        onBehalfRequestors                     = @()
+                    }
+                }
+            $apResults.Add([PSCustomObject]@{ Name = $pkgName; PolicyId = $policy.id; Complexity = $label })
+            Write-Host "  ✓ $pkgName ($($policy.id))" -ForegroundColor DarkGray
+        }
+    }
 }
 catch {
+    # Clean up catalog ONLY if we just created it (not a reused one) and packages failed
+    if ($catalog -and -not $existing -and $apResults.Count -eq 0) {
+        Invoke-MgGraphRequest -Method DELETE `
+            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($catalog.id)" `
+            -ErrorAction SilentlyContinue
+        Write-Host "  ↩ Cleaned up empty catalog." -ForegroundColor DarkGray
+    }
     if ($_ -match '403|Forbidden|Unauthorized|UnAuthorized') {
-        Write-Warning "Skipping EM policies: Entitlement Management not available (license or permission missing)."
-        Write-Warning "Required: Entra ID Governance / Microsoft Entra ID P2 + EntitlementManagement.ReadWrite.All scope."
+        Write-Warning "EM skipped: requires Entra ID P2/Governance license AND Identity Governance Administrator role."
+    } elseif ($_ -match 'Resource not found|BadRequest') {
+        Write-Warning "EM skipped: Entitlement Management not available on this tenant."
     } else {
-        Write-Warning "Skipping EM policies: $_"
+        Write-Warning "EM policy creation failed: $_"
     }
 }
-
-if ($emAvailable) {
-    $catalog = $null
-    try {
-        # Reuse existing EMOS_TestCatalog if it already exists
-        $existing = (Invoke-MgGraphRequest -Method GET `
-            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'EMOS_TestCatalog'" `
-            -OutputType PSObject).value
-        if ($existing) {
-            $catalog = $existing[0]
-            Write-Host "  ↩ Reusing existing catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
-        } else {
-            $catalog = Invoke-GraphPost `
-                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
-                -Body @{
-                    displayName         = 'EMOS_TestCatalog'
-                    description         = 'EMOS integration test catalog'
-                    isExternallyVisible = $false
-                }
-            Write-Host "  ✓ Catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
-        }
-
-        for ($i = 1; $i -le $APCount; $i++) {
-            $complexity = switch (($i % 3)) { 0 { 1 } 1 { 2 } 2 { 3 } }
-            $label      = Get-ComplexityLabel $complexity
-            $pkgName    = "EMOS_AP_{0:D2}_{1}" -f $i, $label
-
-            if ($PSCmdlet.ShouldProcess($pkgName, 'Create access package + policy')) {
-                $pkg = Invoke-GraphPost `
-                    -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages' `
-                    -Body @{
-                        displayName = $pkgName
-                        description = "EMOS test - $label complexity"
-                        catalog     = @{ id = $catalog.id }
-                    }
-
-                $groupIds   = 1..$complexity | ForEach-Object { [guid]::NewGuid().ToString() }
-                $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
-
-                $policy = Invoke-GraphPost `
-                    -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/assignmentPolicies' `
-                    -Body @{
-                        displayName        = "${pkgName}_AutoPolicy"
-                        description        = 'EMOS test auto-assignment policy'
-                        accessPackage      = @{ id = $pkg.id }
-                        allowedTargetScope = 'allMemberUsers'
-                        automaticRequestSettings = @{
-                            requestorFilterType                    = 'IncludeAll'
-                            requestorFilterExpression              = $filterExpr
-                            enableOnBehalfRequestorsToAddAccess    = $true
-                            enableOnBehalfRequestorsToUpdateAccess = $true
-                            enableOnBehalfRequestorsToRemoveAccess = $true
-                            onBehalfRequestors                     = @()
-                        }
-                    }
-                $apResults.Add([PSCustomObject]@{ Name = $pkgName; PolicyId = $policy.id; Complexity = $label })
-                Write-Host "  ✓ $pkgName ($($policy.id))" -ForegroundColor DarkGray
-            }
-        }
-    }
-    catch {
-        # Clean up orphaned catalog if package/policy creation failed
-        if ($catalog) {
-            Write-Warning "Cleaning up orphaned catalog $($catalog.id)..."
-            Invoke-MgGraphRequest -Method DELETE `
-                -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($catalog.id)" `
-                -ErrorAction SilentlyContinue
-        }
-        if ($_ -match '403|Forbidden|Unauthorized|UnAuthorized') {
-            Write-Warning "EM package creation requires 'Identity Governance Administrator' role in Entra ID."
-            Write-Warning "Assign the role at: https://entra.microsoft.com/#view/Microsoft_AAD_IAM/RolesManagementMenuBlade"
-        } else {
-            Write-Warning "EM policy creation failed: $_"
-        }
-    }
-}
-Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor Green
+Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor $(if ($apResults.Count -eq $APCount) { 'Green' } else { 'Yellow' })
 #endregion
 
 #region ── Summary ───────────────────────────────────────────────────────────
