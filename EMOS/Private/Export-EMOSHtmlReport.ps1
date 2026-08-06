@@ -197,7 +197,7 @@ function Export-EMOSHtmlReport {
   </table>
 </div>
 <footer>
-  EMOS v0.1.0 · <a href="https://github.com/kayasax/EMOS">github.com/kayasax/EMOS</a> ·
+  EMOS v1.0.0 · <a href="https://github.com/kayasax/EMOS">github.com/kayasax/EMOS</a> ·
   <a href="https://learn.microsoft.com/entra/identity/users/groups-dynamic-rule-member-of">Microsoft retirement docs</a>
   &nbsp;·&nbsp; Click any name to open directly in Entra portal
 </footer>
@@ -263,3 +263,4 @@ function clearFilters() {
 
     $html | Set-Content -Path $OutputPath -Encoding UTF8
 }
+

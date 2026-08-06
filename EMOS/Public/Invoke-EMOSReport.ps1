@@ -10,6 +10,8 @@ function Invoke-EMOSReport {
         in the user's home directory ($HOME/EMOS-Reports).
     .PARAMETER IncludeOwners
         Retrieve owner/admin details (slower but richer output).
+    .PARAMETER PassThru
+        Return the findings array to the pipeline (default: suppressed to keep console clean).
     .PARAMETER NoHtml
         Skip HTML report generation.
     .PARAMETER Show
@@ -19,14 +21,15 @@ function Invoke-EMOSReport {
     .EXAMPLE
         Invoke-EMOSReport -IncludeOwners -Show
     .EXAMPLE
-        Invoke-EMOSReport -OutputPath "$HOME/EMOS-Reports" -IncludeOwners
+        $findings = Invoke-EMOSReport -PassThru
     #>
     [CmdletBinding()]
     param(
         [string]$OutputPath = (Join-Path $HOME 'EMOS-Reports'),
         [switch]$IncludeOwners,
         [switch]$NoHtml,
-        [switch]$Show
+        [switch]$Show,
+        [switch]$PassThru
     )
 
     $timestamp    = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -90,5 +93,5 @@ function Invoke-EMOSReport {
         if ($Show) { Start-Process $htmlPath }
     }
 
-    return $allFindings
+    if ($PassThru) { return $allFindings }
 }

@@ -33,7 +33,7 @@ Describe 'Invoke-EMOSReport' {
         }
 
         It 'Returns nothing (or empty) when no findings exist' {
-            $result = Invoke-EMOSReport -OutputPath $script:TempOutput
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             @($result).Count | Should -Be 0
         }
 
@@ -68,50 +68,50 @@ Describe 'Invoke-EMOSReport' {
         }
 
         It 'Returns all findings as a flat array' {
-            $result = Invoke-EMOSReport -OutputPath $script:TempOutput
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             @($result).Count | Should -Be 2
         }
 
         It 'Creates a CSV file' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $csv = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.csv'
             $csv.Count | Should -Be 1
         }
 
         It 'Creates a JSON file' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $json = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.json'
             $json.Count | Should -Be 1
         }
 
         It 'Creates an HTML file' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $html = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html'
             $html.Count | Should -Be 1
         }
 
         It 'Does not create HTML file when -NoHtml is specified' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru -NoHtml
             $html = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html'
             $html.Count | Should -Be 0
         }
 
         It 'CSV contains the correct number of rows' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $csv  = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.csv' | Select-Object -Last 1
             $rows = Import-Csv $csv.FullName
             $rows.Count | Should -Be 2
         }
 
         It 'JSON is valid and parses to an array' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $json = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.json' | Select-Object -Last 1
             $parsed = Get-Content $json.FullName | ConvertFrom-Json
             @($parsed).Count | Should -Be 2
         }
 
         It 'HTML file is not empty and contains EMOS branding' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $html    = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html' | Select-Object -Last 1
             $content = Get-Content $html.FullName -Raw
             $content | Should -Match 'EMOS'
@@ -135,7 +135,7 @@ Describe 'Invoke-EMOSReport' {
         }
 
         It 'Tags groups targeted by CA policy with ConditionalAccess blast radius' {
-            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru -NoHtml
             ($result | Where-Object ObjectId -eq 'ca-targeted-group').BlastRadius | Should -Be 'ConditionalAccess'
         }
 
@@ -153,7 +153,7 @@ Describe 'Invoke-EMOSReport' {
             Mock Get-EMOSAffectedEMPolicies{ return @() }
             Mock Get-EMOSCATargetedGroupIds{ return @() }
 
-            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru -NoHtml
             ($result | Where-Object ObjectId -eq $groupId).BlastRadius | Should -Be 'Licensing'
         }
 
@@ -171,7 +171,7 @@ Describe 'Invoke-EMOSReport' {
             Mock Get-EMOSAffectedEMPolicies{ return @() }
             Mock Get-EMOSCATargetedGroupIds{ return @($groupId) }
 
-            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -NoHtml
+            $result = Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru -NoHtml
             ($result | Where-Object ObjectId -eq $groupId).BlastRadius | Should -Be 'ConditionalAccess, Licensing'
         }
     }
@@ -205,7 +205,7 @@ Describe 'Invoke-EMOSReport' {
         }
 
         It 'Uses the updated blast radius tooltip text' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $html = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html' | Select-Object -Last 1
             $content = Get-Content $html.FullName -Raw
 
@@ -213,7 +213,7 @@ Describe 'Invoke-EMOSReport' {
         }
 
         It 'Adds portal edit links in the suggested action column' {
-            Invoke-EMOSReport -OutputPath $script:TempOutput
+            Invoke-EMOSReport -OutputPath $script:TempOutput -PassThru
             $html = Get-ChildItem $script:TempOutput -Filter 'EMOS-Report-*.html' | Select-Object -Last 1
             $content = Get-Content $html.FullName -Raw
 
@@ -225,3 +225,4 @@ Describe 'Invoke-EMOSReport' {
         }
     }
 }
+
