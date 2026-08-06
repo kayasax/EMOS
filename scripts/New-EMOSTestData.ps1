@@ -200,7 +200,7 @@ try {
 
             $pkg = Invoke-GraphPost `
                 -Uri 'https://graph.microsoft.com/v1.0/identityGovernance/entitlementManagement/accessPackages' `
-                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; catalogId = $catalog.id; isHidden = $false }
+                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; isHidden = $false; catalog = @{ id = $catalog.id } }
 
             $groupIds   = 1..$complexity | ForEach-Object { [guid]::NewGuid().ToString() }
             $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
