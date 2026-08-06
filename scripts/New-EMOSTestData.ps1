@@ -189,6 +189,22 @@ try {
             -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs' `
             -Body @{ displayName = 'EMOS_TestCatalog'; description = 'EMOS integration test catalog'; isExternallyVisible = $false }
         Write-Host "  ✓ Catalog: EMOS_TestCatalog ($($catalog.id))" -ForegroundColor DarkGray
+
+        # Add current user as catalog owner — required to create packages via API
+        # (portal does this automatically; Graph API does not)
+        $currentUserId = (Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/me?$select=id' -OutputType PSObject).id
+        Invoke-MgGraphRequest -Method POST `
+            -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs/$($catalog.id)/accessPackageResourceRoleScopes" `
+            -ErrorAction SilentlyContinue | Out-Null
+        # Assign catalog owner role
+        Invoke-MgGraphRequest -Method POST `
+            -Uri "https://graph.microsoft.com/beta/roleManagement/entitlementManagement/roleAssignments" `
+            -Body (@{
+                principalId      = $currentUserId
+                roleDefinitionId = 'ae79f266-94d4-4dab-b730-feca7e132178'  # Catalog owner
+                appScopeId       = "/AccessPackageCatalog/$($catalog.id)"
+            } | ConvertTo-Json) -ContentType 'application/json' -OutputType PSObject | Out-Null
+        Write-Host "  ✓ Added current user as catalog owner" -ForegroundColor DarkGray
     }
 
     for ($i = 1; $i -le $APCount; $i++) {
