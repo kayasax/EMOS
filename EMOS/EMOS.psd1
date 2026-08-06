@@ -10,9 +10,6 @@
 
     RequiredModules = @(
         @{ ModuleName = 'Microsoft.Graph.Authentication'; ModuleVersion = '2.0.0' }
-        @{ ModuleName = 'Microsoft.Graph.Groups';         ModuleVersion = '2.0.0' }
-        @{ ModuleName = 'Microsoft.Graph.Identity.DirectoryManagement'; ModuleVersion = '2.0.0' }
-        @{ ModuleName = 'Microsoft.Graph.Identity.Governance';          ModuleVersion = '2.0.0' }
     )
 
     FunctionsToExport = @(

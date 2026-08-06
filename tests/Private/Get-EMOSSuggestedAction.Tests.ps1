@@ -5,54 +5,37 @@ BeforeAll {
 
 Describe 'Get-EMOSSuggestedAction' {
 
-    Context 'Group object type' {
-        It 'Suggests Replace-Rule or Convert-to-Assigned when only memberOf is present' {
-            $result = Get-EMOSSuggestedAction -Rule 'memberOf("group1")' -ObjectType 'Group'
-            $result | Should -Be 'Replace-Rule or Convert-to-Assigned'
+    Context 'Always returns a non-empty string' {
+        It 'Returns non-empty for Group' {
+            Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'Group' | Should -Not -BeNullOrEmpty
         }
-
-        It 'Suggests replacing memberOf clause when mixed with user attributes' {
-            $result = Get-EMOSSuggestedAction -Rule 'memberOf("g1") -and user.department -eq "Sales"' -ObjectType 'Group'
-            $result | Should -Be 'Replace memberOf clause with supported operator'
+        It 'Returns non-empty for AdminUnit' {
+            Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'AdminUnit' | Should -Not -BeNullOrEmpty
         }
-
-        It 'Returns generic review message for unrecognised mixed rule' {
-            $result = Get-EMOSSuggestedAction -Rule 'memberOf("g1") -and device.something -eq "x"' -ObjectType 'Group'
-            $result | Should -Not -BeNullOrEmpty
+        It 'Returns non-empty for EMPolicy' {
+            Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'EMPolicy' | Should -Not -BeNullOrEmpty
         }
     }
 
-    Context 'AdminUnit object type' {
-        It 'Suggests Replace-Rule or Convert-to-Assigned when only memberOf is present' {
-            $result = Get-EMOSSuggestedAction -Rule 'memberOf("au1")' -ObjectType 'AdminUnit'
-            $result | Should -Be 'Replace-Rule or Convert-to-Assigned'
+    Context 'Group and AdminUnit share the same suggestion' {
+        It 'Group and AdminUnit return the same text' {
+            $g  = Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'Group'
+            $au = Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'AdminUnit'
+            $g | Should -Be $au
         }
 
-        It 'Suggests replacing clause when mixed with user attributes' {
-            $result = Get-EMOSSuggestedAction -Rule 'memberOf("au1") -and user.city -eq "Paris"' -ObjectType 'AdminUnit'
-            $result | Should -Be 'Replace memberOf clause with supported operator'
-        }
-    }
-
-    Context 'EMPolicy object type' {
-        It 'Always suggests alternative assignment method' {
-            $result = Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'EMPolicy'
-            $result | Should -Be 'Replace MemberOf with alternative assignment method'
-        }
-
-        It 'Returns same suggestion regardless of rule complexity' {
-            $rule   = 'memberOf("g1") -and memberOf("g2") -and user.department -eq "HR"'
-            $result = Get-EMOSSuggestedAction -Rule $rule -ObjectType 'EMPolicy'
-            $result | Should -Be 'Replace MemberOf with alternative assignment method'
+        It 'Suggestion is the same regardless of memberOf count' {
+            $single   = Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'Group'
+            $multiple = Get-EMOSSuggestedAction -Rule 'memberOf("g1") -and memberOf("g2")' -ObjectType 'Group'
+            $single | Should -Be $multiple
         }
     }
 
-    Context 'Output is never null or empty' {
-        It 'Always returns a non-empty string for any valid input' {
-            foreach ($type in @('Group','AdminUnit','EMPolicy')) {
-                $result = Get-EMOSSuggestedAction -Rule 'memberOf("x")' -ObjectType $type
-                $result | Should -Not -BeNullOrEmpty
-            }
+    Context 'EMPolicy has a distinct suggestion' {
+        It 'EMPolicy suggestion differs from Group suggestion' {
+            $g  = Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'Group'
+            $em = Get-EMOSSuggestedAction -Rule 'memberOf("g1")' -ObjectType 'EMPolicy'
+            $em | Should -Not -Be $g
         }
     }
 }

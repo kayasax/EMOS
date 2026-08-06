@@ -1,7 +1,10 @@
 function Get-EMOSSuggestedAction {
     <#
     .SYNOPSIS
-        Returns a suggested remediation action based on rule content and object type.
+        Returns a suggested remediation action based on object type.
+    .NOTES
+        MemberOf cannot be combined with other attribute rules, so the suggestion
+        is uniform per object type — the only variable is how many groups to replicate.
     #>
     param(
         [string]$Rule,
@@ -9,21 +12,9 @@ function Get-EMOSSuggestedAction {
         [string]$ObjectType
     )
 
-    $hasOtherOperators = $Rule -match '(?i)\b(user\.|device\.)'
-    $memberOfOnly      = $Rule -notmatch '(?i)(user\.|device\.)' -and $Rule -match '(?i)memberOf'
-
     switch ($ObjectType) {
-        'Group' {
-            if ($memberOfOnly)      { return 'Replace-Rule or Convert-to-Assigned' }
-            if ($hasOtherOperators) { return 'Replace memberOf clause with supported operator' }
-            return 'Review and replace MemberOf'
-        }
-        'AdminUnit' {
-            if ($memberOfOnly)      { return 'Replace-Rule or Convert-to-Assigned' }
-            return 'Replace memberOf clause with supported operator'
-        }
-        'EMPolicy' {
-            return 'Replace MemberOf with alternative assignment method'
-        }
+        'Group'     { return 'Replace memberOf with supported rule operators or convert to Assigned membership' }
+        'AdminUnit' { return 'Replace memberOf with supported rule operators or convert to Assigned membership' }
+        'EMPolicy'  { return 'Replace memberOf with supported operators or plan alternative assignment method' }
     }
 }

@@ -20,33 +20,34 @@ function Get-EMOSAffectedGroups {
 
     Write-Progress -Activity "EMOS Scan" -Status "Scanning dynamic groups..." -PercentComplete 10
 
-    $allGroups = Get-MgGroup -Filter "groupTypes/any(c:c eq 'DynamicMembership')" `
-        -Property "id,displayName,membershipRule,createdDateTime,renewedDateTime" `
-        -All -ConsistencyLevel eventual -CountVariable groupCount
+    # ConsistencyLevel: eventual required for groupTypes/any() filter
+    $allGroups = Invoke-EMOSGraphRequest `
+        -Uri "https://graph.microsoft.com/v1.0/groups?`$filter=groupTypes/any(c:c eq 'DynamicMembership')&`$select=id,displayName,membershipRule,createdDateTime&`$count=true" `
+        -Headers @{ ConsistencyLevel = 'eventual' }
 
-    Write-Verbose "Found $groupCount dynamic groups total. Filtering for MemberOf..."
+    Write-Verbose "Found $($allGroups.Count) dynamic groups. Filtering for MemberOf..."
 
-    $affected = $allGroups | Where-Object { $_.MembershipRule -match $script:MEMBEROF_PATTERN }
+    $affected = $allGroups | Where-Object { $_.membershipRule -match $script:MEMBEROF_PATTERN }
 
     foreach ($group in $affected) {
         $owners = @()
         if ($IncludeOwners) {
             try {
-                $owners = (Get-MgGroupOwner -GroupId $group.Id | Select-Object -ExpandProperty AdditionalProperties) |
-                    ForEach-Object { $_['userPrincipalName'] ?? $_['displayName'] }
+                $ownerItems = Invoke-EMOSGraphRequest -Uri "https://graph.microsoft.com/v1.0/groups/$($group.id)/owners?`$select=userPrincipalName,displayName"
+                $owners = $ownerItems | ForEach-Object { $_.userPrincipalName ?? $_.displayName }
             }
-            catch { Write-Warning "Could not retrieve owners for group $($group.DisplayName)" }
+            catch { Write-Warning "Could not retrieve owners for group $($group.displayName)" }
         }
 
         [PSCustomObject]@{
             ObjectType       = 'DynamicGroup'
-            ObjectId         = $group.Id
-            DisplayName      = $group.DisplayName
-            MembershipRule   = $group.MembershipRule
-            RuleComplexity   = Get-EMOSRuleComplexity -Rule $group.MembershipRule
-            CreatedDateTime  = $group.CreatedDateTime
+            ObjectId         = $group.id
+            DisplayName      = $group.displayName
+            MembershipRule   = $group.membershipRule
+            RuleComplexity   = Get-EMOSRuleComplexity -Rule $group.membershipRule
+            CreatedDateTime  = $group.createdDateTime
             Owners           = $owners -join '; '
-            SuggestedAction  = Get-EMOSSuggestedAction -Rule $group.MembershipRule -ObjectType 'Group'
+            SuggestedAction  = Get-EMOSSuggestedAction -Rule $group.membershipRule -ObjectType 'Group'
             DeadlineDays     = [int](($script:EMOS_RETIREMENT_DATE - (Get-Date)).TotalDays)
             BlastRadius      = ''   # populated by Invoke-EMOSReport
         }

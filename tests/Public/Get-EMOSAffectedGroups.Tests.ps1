@@ -5,14 +5,14 @@ BeforeAll {
     $root = "$PSScriptRoot\..\.."
     . "$root\EMOS\Private\Get-EMOSRuleComplexity.ps1"
     . "$root\EMOS\Private\Get-EMOSSuggestedAction.ps1"
+    . "$root\EMOS\Private\Invoke-EMOSGraphRequest.ps1"
     . "$root\EMOS\Public\Get-EMOSAffectedGroups.ps1"
 
     $script:MEMBEROF_PATTERN     = [regex]'(?i)\bmemberOf\s*\('
     $script:EMOS_RETIREMENT_DATE = [datetime]'2026-11-03'
 
-    # Stubs so Pester can mock Graph cmdlets without the real module loaded
-    function Get-MgGroup      { throw "stub - must be mocked" }
-    function Get-MgGroupOwner { throw "stub - must be mocked" }
+    # Stubs so Pester can mock them
+    function Invoke-MgGraphRequest { throw "stub - must be mocked" }
 }
 
 Describe 'Get-EMOSAffectedGroups' {
@@ -26,7 +26,7 @@ Describe 'Get-EMOSAffectedGroups' {
                 New-MockGroup -DisplayName 'Case Insensitive'-MembershipRule 'MEMBEROF("group-c")'
             )
 
-            Mock Get-MgGroup    { return $mockGroups }
+            Mock Invoke-EMOSGraphRequest { return $mockGroups }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -50,7 +50,7 @@ Describe 'Get-EMOSAffectedGroups' {
     Context 'Output object shape' {
         BeforeEach {
             $mockGroups = @(New-MockGroup -DisplayName 'Shape Test' -MembershipRule 'memberOf("g1")')
-            Mock Get-MgGroup    { return $mockGroups }
+            Mock Invoke-EMOSGraphRequest { return $mockGroups }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -87,7 +87,7 @@ Describe 'Get-EMOSAffectedGroups' {
 
     Context 'Empty tenant — no dynamic groups' {
         BeforeEach {
-            Mock Get-MgGroup    { return @() }
+            Mock Invoke-EMOSGraphRequest { return @() }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -104,7 +104,7 @@ Describe 'Get-EMOSAffectedGroups' {
                 New-MockGroup -MembershipRule 'user.department -eq "Engineering"'
                 New-MockGroup -MembershipRule 'user.jobTitle -contains "Manager"'
             )
-            Mock Get-MgGroup    { return $noMemberOf }
+            Mock Invoke-EMOSGraphRequest { return $noMemberOf }
             Mock Write-Progress { }
             Mock Write-Verbose  { }
         }
@@ -118,11 +118,12 @@ Describe 'Get-EMOSAffectedGroups' {
     Context '-IncludeOwners switch' {
         BeforeEach {
             $grp = New-MockGroup -MembershipRule 'memberOf("g1")'
-            Mock Get-MgGroup       { return @($grp) }
-            Mock Get-MgGroupOwner  {
-                return @([PSCustomObject]@{
-                    AdditionalProperties = @{ userPrincipalName = 'owner@contoso.com' }
-                })
+            Mock Invoke-EMOSGraphRequest {
+                param($Uri)
+                if ($Uri -match '/owners') {
+                    return @([PSCustomObject]@{ userPrincipalName = 'owner@contoso.com'; displayName = 'Owner' })
+                }
+                return @($grp)
             }
             Mock Write-Progress { }
             Mock Write-Verbose  { }

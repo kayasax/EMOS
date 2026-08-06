@@ -19,6 +19,8 @@ function Invoke-EMOSGraphRequest {
         [Parameter(Mandatory)]
         [string]$Uri,
 
+        [hashtable]$Headers = @{},
+
         [ValidateRange(1, 10)]
         [int]$MaxRetries = 5
     )
@@ -35,7 +37,7 @@ function Invoke-EMOSGraphRequest {
         while ($attempt -le $MaxRetries) {
             try {
                 Write-Verbose "EMOS Graph GET (page $pageNumber, attempt $($attempt+1)): $currentUri"
-                $response = Invoke-MgGraphRequest -Method GET -Uri $currentUri -OutputType PSObject
+                $response = Invoke-MgGraphRequest -Method GET -Uri $currentUri -OutputType PSObject -Headers $Headers
                 break   # success — exit retry loop
             }
             catch {

@@ -7,11 +7,12 @@ function New-MockGroup {
         [string]$DisplayName  = 'Test Group',
         [string]$MembershipRule = 'user.department -eq "Sales"'
     )
+    # Use camelCase to match Graph REST API response shape (used by Invoke-EMOSGraphRequest)
     [PSCustomObject]@{
-        Id             = $Id
-        DisplayName    = $DisplayName
-        MembershipRule = $MembershipRule
-        CreatedDateTime = '2025-01-01T00:00:00Z'
+        id              = $Id
+        displayName     = $DisplayName
+        membershipRule  = $MembershipRule
+        createdDateTime = '2025-01-01T00:00:00Z'
     }
 }
 

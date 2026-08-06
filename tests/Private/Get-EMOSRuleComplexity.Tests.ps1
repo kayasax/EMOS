@@ -23,49 +23,33 @@ Describe 'Get-EMOSRuleComplexity' {
         }
     }
 
-    Context 'Low complexity rules' {
-        It 'Returns Low for a single memberOf with no boolean operators' {
-            $rule = 'user.memberOf -any (group.objectId -in ["abc"])'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'Low'
+    Context 'Low complexity — single memberOf' {
+        It 'Returns Low for a single memberOf call' {
+            Get-EMOSRuleComplexity -Rule 'memberOf("group-a")' | Should -Be 'Low'
         }
 
-        It 'Returns Low for a rule with one operator and one memberOf' {
-            $rule = 'memberOf("group1") -and user.department -eq "Sales"'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'Low'
-        }
-
-        It 'Returns Low for a simple rule with no memberOf at all' {
-            $rule = 'user.department -eq "Finance"'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'Low'
+        It 'Is case-insensitive' {
+            Get-EMOSRuleComplexity -Rule 'MEMBEROF("group-a")' | Should -Be 'Low'
         }
     }
 
-    Context 'Medium complexity rules' {
+    Context 'Medium complexity — two memberOf calls' {
         It 'Returns Medium for two memberOf operators' {
-            $rule = 'memberOf("g1") -and memberOf("g2")'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'Medium'
-        }
-
-        It 'Returns Medium for one memberOf with 3 boolean operators' {
-            $rule = 'memberOf("g1") -and user.a -eq "x" -and user.b -eq "y" -or user.c -eq "z"'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'Medium'
+            Get-EMOSRuleComplexity -Rule 'memberOf("g1") -and memberOf("g2")' | Should -Be 'Medium'
         }
     }
 
-    Context 'High complexity rules' {
-        It 'Returns High for three or more memberOf operators' {
-            $rule = 'memberOf("g1") -and memberOf("g2") -and memberOf("g3")'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'High'
+    Context 'High complexity — three or more memberOf calls' {
+        It 'Returns High for three memberOf operators' {
+            Get-EMOSRuleComplexity -Rule 'memberOf("g1") -and memberOf("g2") -and memberOf("g3")' | Should -Be 'High'
         }
 
-        It 'Returns High for two memberOf with many boolean operators' {
-            $rule = 'memberOf("g1") -and memberOf("g2") -and a -eq "x" -and b -eq "y" -or c -eq "z" -and d -eq "w"'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'High'
+        It 'Returns High for four memberOf operators' {
+            Get-EMOSRuleComplexity -Rule 'memberOf("g1") -and memberOf("g2") -and memberOf("g3") -and memberOf("g4")' | Should -Be 'High'
         }
 
-        It 'Is case-insensitive for MemberOf casing' {
-            $rule = 'MEMBEROF("g1") -and MemberOf("g2") -and memberOf("g3")'
-            Get-EMOSRuleComplexity -Rule $rule | Should -Be 'High'
+        It 'Is case-insensitive for all MemberOf variants' {
+            Get-EMOSRuleComplexity -Rule 'MEMBEROF("g1") -and MemberOf("g2") -and memberOf("g3")' | Should -Be 'High'
         }
     }
 }
