@@ -169,11 +169,67 @@ Write-Host "Created: $($auResults.Count)/$AUCount AUs" -ForegroundColor Green
 #endregion
 
 #region ── 4. EM Access Package Policies ─────────────────────────────────────
-Write-Host "`n[4/4] EM access package policies skipped." -ForegroundColor DarkGray
-Write-Host "  EM test data requires catalog owner role assignment via Graph which varies by tenant." -ForegroundColor DarkGray
-Write-Host "  Create EM test data manually via the Entra portal if needed." -ForegroundColor DarkGray
+Write-Host "`n[4/4] Creating $APCount EM access package auto-assignment policies..." -ForegroundColor Cyan
+
 $apResults = [System.Collections.Generic.List[PSCustomObject]]::new()
-Write-Host "Created: 0/$APCount EM policies (skipped)" -ForegroundColor Yellow
+
+try {
+    # Use the built-in General catalog — avoids catalog-owner permission issues
+    $catalog = (Invoke-MgGraphRequest -Method GET `
+        -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackageCatalogs?`$filter=displayName eq 'General'" `
+        -OutputType PSObject -ErrorAction Stop).value | Select-Object -First 1
+
+    if (-not $catalog) { throw "General catalog not found — Entitlement Management may not be enabled." }
+    Write-Host "  ✓ Using built-in catalog: General ($($catalog.id))" -ForegroundColor DarkGray
+
+    for ($i = 1; $i -le $APCount; $i++) {
+        $complexity = switch (($i % 3)) { 0 { 1 } 1 { 2 } 2 { 3 } }
+        $label      = Get-ComplexityLabel $complexity
+        $pkgName    = "EMOS_AP_{0:D2}_{1}" -f $i, $label
+
+        if ($PSCmdlet.ShouldProcess($pkgName, 'Create access package + policy')) {
+            # Skip if already exists
+            $existingPkg = (Invoke-MgGraphRequest -Method GET `
+                -Uri "https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages?`$filter=displayName eq '$pkgName'" `
+                -OutputType PSObject).value | Select-Object -First 1
+            if ($existingPkg) {
+                Write-Host "  ↩ Reusing: $pkgName" -ForegroundColor DarkGray
+                $apResults.Add([PSCustomObject]@{ Name = $pkgName; PolicyId = '(existing)'; Complexity = $label })
+                continue
+            }
+
+            $pkg = Invoke-GraphPost `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/accessPackages' `
+                -Body @{ displayName = $pkgName; description = "EMOS test - $label complexity"; catalog = @{ id = $catalog.id } }
+
+            $groupIds   = 1..$complexity | ForEach-Object { [guid]::NewGuid().ToString() }
+            $filterExpr = "user.memberof -any (group.objectId -in [$( ($groupIds | ForEach-Object { "'$_'" }) -join ', ')])"
+
+            $policy = Invoke-GraphPost `
+                -Uri 'https://graph.microsoft.com/beta/identityGovernance/entitlementManagement/assignmentPolicies' `
+                -Body @{
+                    displayName        = "${pkgName}_AutoPolicy"
+                    description        = 'EMOS test auto-assignment policy'
+                    accessPackage      = @{ id = $pkg.id }
+                    allowedTargetScope = 'allMemberUsers'
+                    automaticRequestSettings = @{
+                        requestorFilterType                    = 'IncludeAll'
+                        requestorFilterExpression              = $filterExpr
+                        enableOnBehalfRequestorsToAddAccess    = $true
+                        enableOnBehalfRequestorsToUpdateAccess = $true
+                        enableOnBehalfRequestorsToRemoveAccess = $true
+                        onBehalfRequestors                     = @()
+                    }
+                }
+            $apResults.Add([PSCustomObject]@{ Name = $pkgName; PolicyId = $policy.id; Complexity = $label })
+            Write-Host "  ✓ $pkgName" -ForegroundColor DarkGray
+        }
+    }
+}
+catch {
+    Write-Warning "EM policy creation failed: $_"
+}
+Write-Host "Created: $($apResults.Count)/$APCount EM policies" -ForegroundColor $(if ($apResults.Count -eq $APCount) { 'Green' } else { 'Yellow' })
 #endregion
 
 #region ── Summary ───────────────────────────────────────────────────────────
